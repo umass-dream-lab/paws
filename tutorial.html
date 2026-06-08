@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PerVis</title>
+    <script src="demo_data.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f14; --surface: #16161d; --surface2: #1e1e28;
+            --border: #2a2a3a; --text: #e4e4ed; --text2: #8888a0;
+            --cyan: #4ecdc4; --orange: #ffab4c; --blue: #6b8afd;
+            --green: #45e89d; --pink: #ff6bf0; --purple: #a87ffb;
+            --gold: #ffc83d;
+            --red: #ff4757;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+        input[type=range] { accent-color: var(--purple); cursor: pointer; width: 100%; margin: 8px 0; }
+        
+        .app-container { 
+            display: grid; 
+            grid-template-columns: 1fr 350px 300px; 
+            grid-template-rows: 60px calc(100vh - 60px); 
+            height: 100vh; 
+            width: 100vw; /* <-- This is the magic fix! */
+        }
+
+        header { grid-column: 1 / -1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; font-weight: 700; font-size: 18px; color: var(--cyan); }
+
+        .viz-col { padding: 24px; display: flex; flex-direction: column; }
+        .controls-col { background: var(--surface); border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding: 24px; overflow-y: auto; }
+        .trisa-col { background: var(--surface); padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+        .step-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; transition: all 0.3s ease; }
+        .step-card.active { border-color: var(--cyan); box-shadow: 0 4px 16px rgba(78, 205, 196, 0.1); }
+        .step-card.hidden { display: none; opacity: 0; }
+
+        .step-label { font-size: 11px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .step-num { background: var(--border); color: var(--text); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; transition: 0.3s; }
+        .step-card.active .step-num { background: var(--cyan); color: var(--bg); }
+
+        .select-styled { width: 100%; padding: 10px 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 12px; outline: none; cursor: pointer; }
+        .select-styled:focus { border-color: var(--cyan); }
+
+        .btn { width: 100%; padding: 10px 14px; border: none; border-radius: 6px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-cyan { background: var(--cyan); color: var(--bg); }
+        .btn-orange { background: var(--orange); color: var(--bg); }
+        .btn-blue { background: var(--blue); color: var(--bg); }
+        .btn-green { background: var(--green); color: var(--bg); }
+        .btn-pink { background: var(--pink); color: var(--bg); }
+        .btn-purple { background: var(--purple); color: var(--bg); }
+        .btn-gold { background: var(--gold); color: #111; font-weight: bold; }
+        .btn-red { background: var(--red); color: #fff; font-weight: 600; }
+        .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .viz-wrapper { position: relative; flex-grow: 1; display: flex; flex-direction: column; }
+        .canvas-container { flex-grow: 1; background: var(--canvas-bg, #000); border: 1px solid var(--border); border-radius: 12px; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+
+        .legend-panel { position: absolute; top: 16px; right: 16px; background: rgba(22, 22, 29, 0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; z-index: 10; display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s ease; }
+        .legend-panel.hidden { opacity: 0; pointer-events: none; }
+        .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 500; color: var(--text); }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+        .chat-bubble { background: var(--bg); border: 1px solid var(--border); padding: 16px; border-radius: 12px; border-bottom-left-radius: 4px; font-size: 14px; line-height: 1.6; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .txt-highlight { color: var(--cyan); font-weight: 600; }
+        .txt-warning { color: var(--orange); font-weight: 600; }
+        .txt-concept { color: var(--blue); font-weight: 600; }
+        .txt-success { color: var(--green); font-weight: 600; }
+        .txt-danger { color: var(--red); font-weight: 600; }
+        .txt-gold { color: var(--gold); font-weight: 600; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .annotation-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+        .chart-annotation { position: absolute; background: rgba(22, 22, 29, 0.85); backdrop-filter: blur(8px); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 8px; padding: 14px; color: var(--text); font-size: 12px; line-height: 1.5; width: 260px; box-shadow: 0 12px 32px rgba(0,0,0,0.5); opacity: 0; transform: translateY(15px); animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.4s; }
+        .chart-annotation.right-align { border-left: 1px solid var(--border); border-right: 3px solid var(--orange); text-align: right; }
+        .anno-title { font-weight: 700; color: var(--orange); margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .anno-dot { position: absolute; width: 16px; height: 16px; background: transparent; border: 2px solid var(--orange); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 4px rgba(255, 171, 76, 0.2); opacity: 0; animation: pulseFade 2s infinite 0.2s; }
+
+        @keyframes slideUpFade { to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulseFade { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } }
+
+        .layer-toggle { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 13px; color: var(--text2); font-weight: 500; }
+        .layer-toggle:hover { background: rgba(255,255,255,0.08); }
+        .layer-toggle.active { border-color: var(--cyan); color: var(--text); background: rgba(78, 205, 196, 0.05); }
+        .layer-toggle .icon-eye { transition: 0.2s; font-size: 14px; }
+        .layer-toggle:not(.active) .icon-eye { opacity: 0.3; filter: grayscale(100%); }
+
+        @keyframes computationalGrid { 0% { top: -100%; opacity: 0; } 10% { opacity: 0.8; } 90% { opacity: 0.8; } 100% { top: 100%; opacity: 0; } }
+        .saliency-grid { position: absolute; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(69, 232, 157, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(69, 232, 157, 0.3) 1px, transparent 1px); background-size: 25px 25px; border-bottom: 3px solid #45e89d; box-shadow: 0 10px 20px -5px rgba(69, 232, 157, 0.5); animation: computationalGrid 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; pointer-events: none; z-index: 10; }
+
+        .viridis-slider { -webkit-appearance: none; width: 100%; height: 12px; padding: 0; background-image: linear-gradient(90deg, rgb(68, 1, 84) 0%, rgb(59, 82, 139) 25%, rgb(33, 145, 140) 50%, rgb(94, 201, 98) 75%, rgb(253, 231, 37) 100%); background-repeat: no-repeat; background-size: 100% 100%; border-radius: 6px; outline: none; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; margin-top: 6px; }
+        .viridis-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 24px; border-radius: 4px; background: #fff; cursor: pointer; border: 2px solid #111; box-shadow: 0 0 5px rgba(0,0,0,0.8); }
+    
+        /* --- LIGHT THEME OVERRIDES --- */
+        body.light-theme {
+            --bg: #f4f4f9; 
+            --surface: #ffffff; 
+            --surface2: #e4e4ed;
+            --border: #cdd0dc; 
+            --text: #16161d; 
+            --text2: #5a5a72;
+            --canvas-bg: #ffffff; 
+            
+            --cyan: #0d9488; 
+            --orange: #ea580c; 
+            --blue: #4f46e5;
+            --green: #059669; 
+            --pink: #db2777; 
+            --purple: #7c3aed;
+            --gold: #d97706;
+            --red: #dc2626;
+        }
+        body.light-theme .legend-panel,
+        body.light-theme .chart-annotation {
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+        }
+
+    </style>
+</head>
+<body>
+
+    <body>
+
+<div id="fullScreenIntro" style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(16px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
+    <div style="max-width: 650px; background: var(--surface); padding: 40px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 24px 64px rgba(0,0,0,0.6);">
+        <h3 style="font-size: 22px; color: var(--cyan); margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 28px;">📊</span> Student Performance Database
+        </h3>
+        
+        <div style="display: flex; flex-direction: column; gap: 24px; font-size: 15px; color: var(--text); line-height: 1.6;">
+            <div style="display: flex; gap: 16px; align-items: start;">
+                <div style="font-size: 22px; line-height: 1;">🔍</div>
+                <div>I am Trisa. Currently, I am working with a student performance database. I am planning to explore different kinds of relationships here. For example, observing the performance in grades vs study time is a potential one.</div>
+            </div>
+            
+            <div style="display: flex; gap: 16px; align-items: start;">
+                <div style="font-size: 22px; line-height: 1;">⚙️</div>
+                <div>It is easy to do a rendering of the complete data once. But to actively explore different relations, repeated rendering of the complete data is a computationally heavy operation.</div>
+            </div>
+            
+            <div style="display: flex; gap: 16px; align-items: start;">
+                <div style="font-size: 22px; line-height: 1;">🎯</div>
+                <div>What if I proceed with a sample? From the metadata, I know this dataset has around 10,150 entries. I can proceed with a <span class="txt-highlight">sample of 1000 points (~10%)</span>, which should be fairly enough!</div>
+            </div>
+        </div>
+        
+        <button class="btn btn-cyan" style="width: 100%; margin-top: 40px; font-size: 15px; padding: 14px; font-weight: bold;" onclick="startApp()">🚀 Start Application Workflow</button>
+    </div>
+</div>
+
+<div class="app-container">
+
+<div class="app-container">
+   <header style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 24px;">
+            <span>PerVis</span>
+            <div style="display: flex; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--border);">
+                <button class="btn" style="width: auto; padding: 6px 16px; background: var(--cyan); color: var(--bg); font-weight: bold; cursor: default;">Part A: Tutorial</button>
+                <button class="btn" style="width: auto; padding: 6px 16px; background: transparent; color: var(--text2); font-weight: 500; border: none;" onclick="window.location.href='application.html'">Part B: Application</button>
+            </div>
+        </div>
+        <button class="btn" style="width: auto; padding: 6px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border);" onclick="toggleTheme()">🌓 Toggle Theme</button>
+    </header>
+
+    <div class="viz-col">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 16px; margin: 0;">Visualization Window</h2>
+            <div style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text2); background: var(--surface2); padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                <span>Marker Size: <strong id="markerSizeDisplay" style="color: var(--cyan);">2.0</strong></span>
+                <input type="range" min="0.5" max="5.0" step="0.1" value="2.0" style="width: 100px; margin: 0; accent-color: var(--cyan);" oninput="changeGlobalMarkerSize(this.value)">
+            </div>
+        </div>
+      <div class="viz-wrapper">
+            <div id="vizLegend" class="legend-panel hidden"></div>
+            <div id="annotationsLayer" class="annotation-layer"></div>
+            
+            <div class="canvas-container" id="canvasArea" style="position: relative;">
+                
+                <div id="canvasMsg" style="position: absolute; z-index: 5; color: var(--text2); display: none;"></div>
+                
+              
+
+            </div>
+        </div>
+        
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--text2);">
+            <strong style="display: block; margin-bottom: 6px;">References:</strong>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; padding-left: 8px; line-height: 1.3;">
+                <div>[1] Park, Y., et al., "Visualization-aware sampling for very large databases", ICDE 2016.</div>
+                <div>[2] Chen, Z., et al., "Variational blue noise sampling", IEEE TVCG, 18(10).</div>
+                <div>[3] Eldar, Y., et al., "The farthest point strategy for progressive image sampling", IEEE TIP, 6(9).</div>
+                <div>[4] Moumoulidou, Zafeiria, et al. "Perception-aware Sampling for Scatterplot Visualizations." arXiv preprint arXiv:2504.20369 (2025).</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-col" id="colControls">
+        <h2 style="margin-bottom: 16px; font-size: 16px;">Controls & Steps</h2>
+        
+        <div class="step-card active" id="step1Card">
+            <div class="step-label"><span class="step-num">1</span> Initial Exploration</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Generate a random sample to quickly build the analysis workflow.</div>
+            
+            <button class="btn btn-orange" id="btnStep1" onclick="runRandomSample()">🎲 Generate Random Sample (1k)</button>
+            
+            <div id="step1Toggles" style="display: none; flex-direction: column; gap: 8px; margin-top: 12px;">
+                <div class="layer-toggle step1-toggle active" id="btnToggle1Circles" onclick="toggleStep1Circles()">
+                    <span style="display:flex; align-items:center; gap:10px;">⭕ Toggle Core Trends</span><span class="icon-eye">👁️</span>
+                </div>
+            </div>
+        </div>
+        
+        
+       <div class="step-card hidden" id="step3Card">
+            <div class="step-label" style="color: var(--blue);"><span class="step-num">2</span> The Full Picture</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Plot the complete dataset</div>
+            
+            <button class="btn btn-blue" id="btnStep3" onclick="executeStep(3)">📊 Finalize on Complete Data</button>
+
+            <div id="step3Toggles" style="display: none; flex-direction: column; gap: 8px; margin-top: 12px;">
+                <div class="layer-toggle step3-toggle active" id="btnToggle3Circles" onclick="toggleStep3Circles()">
+                    <span style="display:flex; align-items:center; gap:10px;">⭕ Toggle All Trends Highlight</span><span class="icon-eye">👁️</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card hidden" id="step4Card">
+            <div class="step-label" style="color: var(--orange);"><span class="step-num">3</span> The Autopsy</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Overlay the random sample onto the original data.</div>
+            <button class="btn btn-orange" id="btnStep4" onclick="startAutopsy()" style="background: transparent; border: 1px solid var(--orange); color: var(--orange); margin-bottom: 12px;">🚨 Start Visual Autopsy</button>
+            <div id="step4Toggles" style="display: none; flex-direction: column; gap: 8px;">
+                <div class="layer-toggle active toggle-raw" onclick="toggleLayer('raw', 4)">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Original Data</span><span class="icon-eye">👁️</span>
+                </div>
+                <div class="layer-toggle active toggle-sample" onclick="toggleLayer('sample', 4)">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--orange);"></div> Random Sample</span><span class="icon-eye">👁️</span>
+                </div>
+                <button class="btn btn-purple" id="btnGoStep5" style="margin-top: 12px;" onclick="startStep5()">🕹️ Open Sampler Playground</button>
+            </div>
+        </div>
+
+        <div class="step-card hidden" id="step5Card">
+            <div class="step-label" style="color: var(--purple);"><span class="step-num">4</span> The Sampler Playground</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Compare different sampling algorithms across different budgets</div>
+            <div id="step5Controls" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text2);">
+                        <span>Sample Budget:</span><strong id="budgetValueDisp" style="color: var(--text); font-size: 14px;">1000 / 10150</strong>
+                    </div>
+                    <input type="range" id="budgetSlider" min="0" max="5" step="1" value="2" oninput="changeBudget5(this.value)">
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text2);">
+                        <span>250</span><span>500</span><span>1000</span><span>1500</span><span>3000</span><span>All (10150)</span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; font-weight: bold; color: var(--text2); margin-top: 4px;">SELECT ALGORITHM:</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="layer-toggle step5-sampler active" id="btnSamRandom" onclick="setSampler5('random')">
+                        <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--orange);"></div> Random</span>
+                    </div>
+                    <div class="layer-toggle step5-sampler" id="btnSamVas" onclick="setSampler5('vas')">
+                        <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--purple);"></div> VAS</span>
+                    </div>
+                    <div class="layer-toggle step5-sampler" id="btnSamDensity" onclick="setSampler5('density')">
+                        <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--gold);"></div> DBS</span>
+                    </div>
+                    <div class="layer-toggle step5-sampler" id="btnSamBlueNoise" onclick="setSampler5('blue_noise')">
+                        <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--pink);"></div> Blue-Noise</span>
+                    </div>
+                    <div class="layer-toggle step5-sampler" id="btnSamMaxMin" onclick="setSampler5('max_min')">
+                        <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--cyan);"></div> Max-Min</span>
+                    </div>
+                </div>
+                
+                <div style="border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div class="layer-toggle step5-toggle" id="btnToggle5Raw" onclick="toggleStep5Raw()">
+                        <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Overlay Original Data</span><span class="icon-eye">👁️</span>
+                    </div>
+                    
+                    <div class="layer-toggle step5-toggle" id="btnToggle5Takeaways" onclick="toggleStep5Takeaways()" style="display: none; border-color: var(--purple); background: rgba(168, 127, 251, 0.05);">
+                        <span style="display:flex; align-items:center; gap:10px; color: var(--purple);"><strong>💡 Toggle Evaluation Takeaways</strong></span><span class="icon-eye">❌</span>
+                    </div>
+
+                    <button class="btn btn-gold" id="btnGoStep7" style="display: none; margin-top: 16px; width: 100%; justify-content: center;" onclick="transitionToStep7()">➡️ Proceed to Human Visual Targets</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card hidden" id="step7Card">
+            <div class="step-label" style="color: var(--gold);"><span class="step-num">5</span> Human Visual Targets</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Observe which areas naturally attract human visual attention.</div>
+            <div id="step7Toggles" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                <div class="layer-toggle step7-toggle active" onclick="toggleStep7All()">
+                    <span style="display:flex; align-items:center; gap:10px;">⭕ Toggle Visual Focus & Observations</span><span class="icon-eye">👁️</span>
+                </div>
+            </div>
+            <button class="btn btn-green" id="btnGoStep8" style="margin-top: 15px;" onclick="transitionToStep8()">➡️ Identify visual focus computationally</button>
+        </div>
+
+        <div class="step-card hidden" id="step8Card">
+            <div class="step-label" style="color: var(--green);"><span class="step-num">6</span> Computational Model of Visual Attention</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Computationally model human visual attention using a Saliency Map.</div>
+            <div id="step8Results" style="display: none; flex-direction: column; margin-top: 15px;">
+                <div style="font-size: 11px; color: var(--text2); display: flex; justify-content: space-between; font-weight: bold;">
+                    <span>Background Noise</span><span style="color: var(--gold);">High Visual Attention</span>
+                </div>
+                <input type="range" id="saliencyFilter" min="0" max="1" step="0.05" value="0.05" oninput="updateSaliencyThreshold(this.value)" class="viridis-slider">
+                <div style="font-size: 11px; color: var(--text2); text-align: center; margin-top: 8px; margin-bottom: 12px;">
+                    Showing points with score > <span id="salThresholdDisp" style="color: var(--text); font-weight: bold;">0.05</span>
+                </div>
+            </div>
+            <button class="btn btn-gold hidden" id="btnGoStep10" style="margin-top: 15px;" onclick="startStep10()">▶️ Watch PAWS in Action</button>
+        </div>
+
+        <div class="step-card hidden" id="step10Card">
+            <div class="step-label" style="color: var(--gold);"><span class="step-num">7</span> Visualizing Perception-aware Sampling</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Through animation watch how PAWS iteratively selects points</div>
+            <div id="step10Toggles" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                <div class="layer-toggle step10-toggle-raw" id="btnToggle10Raw" onclick="toggleStep10Raw()">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Overlay Original Data</span><span class="icon-eye">❌</span>
+                </div>
+            </div>
+            <button class="btn btn-gold" id="btnPlayPaws" onclick="runPawsAnimation()">▶️ Play Selection Animation</button>
+            <button class="btn btn-cyan" id="btnResumePaws" style="display: none; margin-top: 12px; width: 100%; justify-content: center;" onclick="resumePawsAnimation()">⏯️ Resume Animation</button>
+            <button class="btn btn-green hidden" id="btnGoStep11" style="margin-top: 15px;" onclick="startStep11()">🕹️ Open PAWS Playground</button>
+        </div>
+
+        <div class="step-card hidden" id="step11Card">
+            <div class="step-label" style="color: var(--green);"><span class="step-num">8</span> Perception-Aware Sample</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Performance of PAWS over different sample budget</div>
+           <div style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text2);">
+                    <span>Sample Budget:</span><strong id="pawsBudgetValue" style="color: var(--text); font-size: 14px;">1000 / 10150</strong>
+                </div>
+                <input type="range" id="pawsBudgetSlider" min="0" max="5" step="1" value="2" oninput="changePawsBudget(this.value)">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text2);">
+                    <span>250</span><span>500</span><span>1000</span><span>1500</span><span>3000</span><span>All (10150)</span>
+                </div>
+            </div>
+           <div id="step11Toggles" style="display: flex; flex-direction: column; gap: 8px;">
+                <div class="layer-toggle step11-toggle step11-raw" onclick="toggleStep11Layer('raw')">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Original Overlay</span><span class="icon-eye">❌</span>
+                </div>
+                <div class="layer-toggle step11-toggle active step11-sample" onclick="toggleStep11Layer('sample')">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--red);"></div> PAWS Sample</span><span class="icon-eye">👁️</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="trisa-col">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--orange); display: grid; place-items: center; font-size: 20px;">👩🏽‍💻</div>
+            <div>
+                <div style="font-weight: 700; color: var(--orange);">Trisa</div>
+                <div style="font-size: 12px; color: var(--text2);">Data Scientist</div>
+            </div>
+        </div>
+        <div id="chatLog" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="chat-bubble">
+                Let's first understand my current scenario!
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. STATE, NARRATIVE & THEME ENGINE
+    // ==========================================
+    const APP_STATE = {
+        dataset: 'cs_grades', 
+        sampleSize: "1000", //
+        markerSize: 2.0, // <-- NEW ADDITION
+        currentStep: 1,
+        layers: { raw: true, sample: true, annotations: true },
+        step1: { circles: true, sampled: false },
+        step3: { circles: true },
+        
+        // <-- Changed budgetIndex to 2
+        step5: { budgetIndex: 2, budgets: ["250", "500", "1000", "1500", "3000", "All (10150)"], activeSampler: 'random', showRaw: false, showTakeaways: false, visitedSamplers: ['random'], proceedClicked: false },
+        
+        // The newly mapped states:
+        step7: { comments: true, gazes: true }, 
+        step8: { computed: false, threshold: 0.00 }, 
+        step10: { animating: false, speed: 1.0, showRaw: false, orderedPoints: [], currentIndex: 0, isPaused: false, hasAutoPlayed: false }, 
+        
+       step11: { budgetIndex: 2, budgets: ["250", "500", "1000", "1500", "3000", "All (10150)"], layers: { raw: false, sample: true } }
+    };
+   
+    function getThemeColors() {
+        const isLight = document.body.classList.contains('light-theme');
+        return {
+            raw: isLight ? '96, 165, 250' : '107, 138, 253', 
+            random: isLight ? '234, 88, 12' : '255, 171, 76',       
+            vas: isLight ? '126, 34, 206' : '168, 127, 251',        
+            density: isLight ? '180, 83, 9' : '255, 200, 61',      
+            blue_noise: isLight ? '219, 39, 119' : '255, 107, 240', 
+            max_min: isLight ? '13, 148, 136' : '78, 205, 196',  
+            paws: isLight ? '220, 38, 38' : '255, 71, 87',          
+        };
+    }
+
+   const SAMPLER_CHATS = {
+        'random': `<strong>Random Sampling:</strong><br><br>It's <span class="txt-success">very fast</span>, but I <span class="txt-danger">could not make the left smaller cluster visible</span> even with a higher sample size.`,
+        'vas': `<strong>Visualization-Aware Sampling (VAS) [1]:</strong><br><br>VAS takes a <span class="txt-danger">lot of time</span> to compute its sample.<br><br>VAS optimizes for the final rendered plot. Because dense areas suffer from overplotting, it determines that sampling more points from there won't change the visual output. <br><br>Instead, it spends its budget on covering different regions. It captures <span class="txt-concept">cluster shapes</span>, but within smaller budget often fails to preserve <span class="txt-warning">density characteristics</span> and <span class="txt-warning">boundary separation</span>.`,
+        'density': `<strong>Density-Biased Sampling (DBS):</strong><br><br>DBS is also <span class="txt-success">very fast</span>. <br><br>I can see that DBS focuses on preserving different <span class="txt-concept">dense regions</span> of the data. However, if there is a significant density imbalance, it is <span class="txt-warning">favoring the denser regions</span> and ignoring the sparser ones.`,
+        
+        'blue_noise': `<strong>Blue-Noise Sampling [2]:</strong><br><br>Blue-noise samples the data points by enforcing a minimum spatial distance among them.<br><br>Rather than being cluttered, this naturally forces the sample to spread out. However, calculating those distance constraints makes it <span class="txt-danger">computationally very expensive</span>, and <strong>in smaller budgets, the smaller clusters are not as visible</strong>.`,
+
+        'max_min': `<strong>Max-Min Sampling [3]:</strong><br><br>Max-min searches for empty space to cover the plot by always selecting the point that is globally <span class="txt-concept">furthest away</span> from the already sampled points.<br><br>While this encourages spatial coverage, it treats noise and massive cores equally, which <span class="txt-danger">harms the relative density</span> of the clusters, making them inseparable for smaller budgets.`
+    };
+
+    const TOUR_STEPS = {
+       1: { 
+            chat: `I am working with a student performance database. I am planning to explore different kinds of relationships here. For example, observing the performance in grades vs study time is a potential one. <br><br>It is easy to do a full rendering of the complete data once. But to actively explore different relations, repeated rendering of the complete data is a heavy operation.<br><br>What if I proceed with a sample? From the metadata, I know this dataset has around 10,150 entries. I can proceed with a <span class="txt-highlight">sample of 1500 points (~15%)</span>, which should be fairly enough!<br><br>Random sampling is a quite popular approach. Let's observe its sample by pressing the <strong><span class="txt-warning">Generate Random Sample</span></strong> button.`, 
+            action: function() { 
+                if (APP_STATE.step1.sampled) renderStep1Canvas(); 
+                else { document.getElementById('canvasMsg').innerHTML = '[ Ready to Sample ]'; initCanvas(); }
+            } 
+        },
+        
+        3: { 
+            chat: `Now that my workflow is designed based on the sample, I can finalize my findings over the <span class="txt-highlight">complete data</span>.<br><br>Wait... looking at the new plots, it looks like what I initially thought as outliers may actually belong to <strong><span class="txt-danger">additional clusters</span></strong> that I completely missed!<br><br>To understand why this happened, let's move to the next step and perform a <strong><span class="txt-warning">visual autopsy</span></strong>.`, 
+            action: function() { showFullPlot(); } 
+        },
+        
+        4: { chat: `By overlaying the sample onto the original data, I can <span class="txt-concept">identify the regions</span> the sample has preserved and the ones it has missed.<br><br>Random sampling <span class="txt-danger">failed to select enough points</span> from the smaller, less-dense clusters.<br><br>Perhaps other sampling algorithms, or a larger sample budget, could solve this? Let's open the <strong>Sampler Playground</strong> to find out!`, 
+            action: function() { renderStep4(); } 
+        },
+            
+        5: { chat: `Alright, here is the Sampler Playground!<br><br>Let's try switching between the algorithms and adjusting the slider. I want to <span class="txt-highlight">capture the three core trends and two smaller ones</span>.<br><br>${SAMPLER_CHATS['random']}`, 
+            action: function() { renderStep5(); } 
+        },
+        
+      7: { 
+            chat: `When we look at a dense scatter plot, our visual system naturally prioritizes specific targets:<br><br><strong>i)</strong> We immediately notice <span class="txt-gold">massive, high-density cores</span>.<br><strong>ii)</strong> Our attention jumps to <span class="txt-gold">isolated, rare clusters</span>.<br><strong>iii)</strong> We subconsciously map the <span class="txt-gold">boundaries and spaces</span> to model data spread pattern.<br><br>A visually representative sample MUST capture all of these patterns. Is there a way to computationally model these regions of visual interest?<br><br>Let's explore this by clicking <span class="txt-concept">Identify visual focus computationally</span> button!`, 
+            action: function() { 
+                APP_STATE.step7 = { comments: true, gazes: true }; 
+                renderStep7Canvas(); 
+            } 
+        },
+        
+        8: { chat: `Using computer vision techniques I can compute <span class="txt-concept">saliency maps</span> which can mathematically model the regions of the scatter plot that are likely to attract human visual attention. <br><br>I can notice how saliency maps give a higher weight to the points in the core trends and the two smaller clusters (visualized through brighter colors).<br><br>Let's use the slider to filter points by their visual attention weights to separate the visually salient regions from the background.<br><br>I heard that Perception-aware Sampling (PAWS) [4] uses these saliency information to guide its selection process! Let's watch how PAWS iteratively selects points by clicking <span class="txt-concept">Watch PAWS in Action</span> button!`, 
+            action: function() { 
+                APP_STATE.step8.computed = true;
+                document.getElementById('step8Results').style.display = 'flex';
+                document.getElementById('btnGoStep10').classList.remove('hidden'); 
+                document.getElementById('annotationsLayer').innerHTML = ''; 
+                renderStep8Canvas(); 
+            } 
+        },
+        
+        10: { chat: `<strong>How does PAWS actually work? Let's watch the animation!</strong><br><br>In the playground, I saw that <span class="txt-concept">Max-Min</span> achieved good coverage by always picking the point furthest away from what was already selected—but it may ignore preserving the relative densities of the clusters.<br><br>PAWS improves this by merging Max-Min's coverage objective with the saliency information. At each step, it selects a new point that maximizes a combined score:<br><br><div style="text-align: center; font-weight: bold; padding: 10px; border: 1px dashed var(--gold); margin: 10px 0; font-family: monospace; font-size: 15px;">Score = Saliency &times; Distance</div><br>This ensures it covers the space (like Max-Min) while prioritizing the visually important regions.
+        <br><br>Let's open the PAWS playground to see how it performs across different budgets!`, 
+            action: function() { 
+                renderStep10Static(); 
+                if (!APP_STATE.step10.hasAutoPlayed) {
+                    APP_STATE.step10.hasAutoPlayed = true;
+                    setTimeout(() => { runPawsAnimation(); }, 600);
+                }
+            } 
+        },
+        
+        11: { chat: `Using PAWS, I can get good samples that <span class="txt-success">ensure both the core trends and coverage!</span><br><br>Let's use the slider to change the budget and observe more! <br><br>Even with a tiny sample budget, PAWS produces a sample where I can clearly pinpoint all the patterns of the original data!`, 
+            action: function() { renderStep11Canvas(); } 
+        }
+    };
+
+    // ==========================================
+    // 2. CORE CONTROLLER
+    // ==========================================
+    function changeGlobalMarkerSize(val) {
+        APP_STATE.markerSize = parseFloat(val);
+        document.getElementById('markerSizeDisplay').innerText = APP_STATE.markerSize.toFixed(1);
+        redrawCurrentCanvas();
+    }
+
+   function startApp() {
+        // 1. Hide the full-screen onboarding modal smoothly
+        const modal = document.getElementById('fullScreenIntro');
+        modal.style.transition = 'opacity 0.4s ease';
+        modal.style.opacity = '0';
+        setTimeout(() => modal.style.display = 'none', 400);
+
+        // 2. Draw the empty canvas axes
+        initCanvas();
+
+        // 3. Update Trisa's chat to prompt the very first action!
+        const initChat = `Let's observe a sample by pressing the <strong><span class="txt-warning">Generate Random Sample</span></strong> button.`;
+        updateChat(initChat);
+        
+        // 4. Update the TOUR_STEPS so it remembers this if they navigate back
+        TOUR_STEPS[1].chat = initChat;
+    }
+
+    function executeStep(stepNum) {
+        // --- THE KILL SWITCH (Mapped to Step 10) ---
+        if (APP_STATE.currentStep === 10 && stepNum !== 10) {
+            APP_STATE.step10.animating = false;
+            const btn = document.getElementById('btnPlayPaws');
+            if (btn) { btn.innerHTML = "▶️ Play Selection Animation"; btn.disabled = false; }
+        }
+
+        APP_STATE.currentStep = stepNum;
+        document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+        document.getElementById(`step${stepNum}Card`).classList.add('active');
+        if(TOUR_STEPS[stepNum]) TOUR_STEPS[stepNum].action();
+    }
+    
+    function updateChat(htmlContent) { document.getElementById('chatLog').innerHTML = `<div class="chat-bubble">${htmlContent}</div>`; }
+
+    function revealNextStepCard(nextStepNum) {
+        const nextCard = document.getElementById(`step${nextStepNum}Card`);
+        if (nextCard) { nextCard.classList.remove('hidden'); setTimeout(() => nextCard.style.opacity = '1', 50); }
+    }
+
+    function updateLegend(items) {
+        const legend = document.getElementById('vizLegend');
+        if (!items || items.length === 0) { legend.classList.add('hidden'); return; }
+        legend.innerHTML = items.map(item => `<div class="legend-item"><div class="legend-dot" style="background: ${item.color};"></div><div>${item.label}</div></div>`).join('');
+        legend.classList.remove('hidden');
+    }
+
+    function initCanvas() {
+        const container = document.getElementById('canvasArea');
+        document.querySelectorAll('canvas').forEach(c => c.remove()); 
+        document.getElementById('annotationsLayer').innerHTML = '';
+        
+        const canvas = document.createElement('canvas'); container.appendChild(canvas);
+        const width = container.clientWidth, height = container.clientHeight;
+        canvas.width = width * window.devicePixelRatio; canvas.height = height * window.devicePixelRatio;
+        
+        const ctx = canvas.getContext('2d'); ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        const pad = 40, plotW = width - pad * 2, plotH = height - pad * 2;
+
+        const style = getComputedStyle(document.body);
+        const borderColor = style.getPropertyValue('--border').trim() || '#2a2a3a';
+        const textColor = style.getPropertyValue('--text2').trim() || '#8888a0';
+
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(pad, pad - 20); ctx.lineTo(pad, height - pad); ctx.lineTo(width - pad + 20, height - pad); ctx.stroke();
+
+        ctx.fillStyle = textColor; ctx.font = '600 13px Inter';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText('0', pad - 8, height - pad + 8);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('X', width - pad + 28, height - pad);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('Y', pad, pad - 28);
+
+        return { ctx, pad, plotW, plotH, height, width }; 
+    }
+
+    function toggleTheme() { document.body.classList.toggle('light-theme'); redrawCurrentCanvas(); }
+
+    function navigateToStep(stepNum) {
+        const card = document.getElementById(`step${stepNum}Card`);
+        if (!card || card.classList.contains('hidden') || APP_STATE.currentStep === stepNum) return;
+
+        if (APP_STATE.currentStep === 10) {
+            APP_STATE.step10.animating = false;
+            const btn = document.getElementById('btnPlayPaws');
+            if (btn) { btn.innerHTML = "▶️ Play Selection Animation"; btn.disabled = false; }
+        }
+
+        APP_STATE.currentStep = stepNum;
+        document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+
+        if (TOUR_STEPS[stepNum] && TOUR_STEPS[stepNum].chat) { updateChat(TOUR_STEPS[stepNum].chat); }
+        redrawCurrentCanvas();
+    }
+    
+    function redrawCurrentCanvas() {
+        const step = APP_STATE.currentStep;
+        if (step === 1 && APP_STATE.step1.sampled) renderStep1Canvas();
+        else if (step === 1 && !APP_STATE.step1.sampled) { document.getElementById('canvasMsg').innerHTML = '[ Ready to Sample ]'; initCanvas(); }
+        else if (step === 3) renderStep3Canvas();
+        else if (step === 4) renderStep4();
+        else if (step === 5 || step === 6) renderStep5(); // Step 6 uses the step 5 canvas
+        else if (step === 7) renderStep7Canvas(); 
+        else if (step === 8) renderStep8Canvas();
+        else if (step === 10) renderStep10Static();
+        else if (step === 11) renderStep11Canvas();
+    }
+
+    function enableNonLinearNavigation() {
+        document.querySelectorAll('.step-card').forEach(card => {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', function(e) {
+                if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.closest('.layer-toggle')) return;
+                const stepId = this.id.replace('step', '').replace('Card', '');
+                const stepNum = isNaN(stepId) ? stepId : parseInt(stepId);
+                navigateToStep(stepNum);
+            });
+        });
+    }
+
+    // ==========================================
+    // 3. CANVAS RENDERERS (STEPS 1 TO 6)
+    // ==========================================
+    function runRandomSample() {
+        APP_STATE.step1.sampled = true;
+        document.getElementById('btnStep1').style.display = 'none';
+        document.getElementById('step1Toggles').style.display = 'flex';
+        
+        const postSampleChat = `Wow, that was <span class="txt-success">fast!</span><br><br>I see <strong><span class="txt-gold">3 obvious clusters</span></strong>, probably corresponding to 3 different course sections, and spread outliers that I can probably ignore for the moment.<br><br>I will dive into these particular clusters to better understand their differences and impact of other factors, and build my report.<br><br>Let's move to <strong>Step 2</strong> to <span class="txt-highlight"> finalize this workflow to the complete data!</span>`;
+        updateChat(postSampleChat);
+        TOUR_STEPS[1].chat = postSampleChat;
+        
+        renderStep1Canvas();
+        revealNextStepCard(3);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+    
+    function toggleStep1Circles() {
+        APP_STATE.step1.circles = !APP_STATE.step1.circles;
+        const el = document.getElementById('btnToggle1Circles');
+        if (APP_STATE.step1.circles) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+        else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        renderStep1Canvas();
+    }
+
+    function renderStep1Canvas() {
+        const ds = APP_STATE.dataset; const k = APP_STATE.sampleSize; const colors = getThemeColors();
+        let sampleData = precomputedData?.[ds]?.[k]?.["random"] || Array.from({length: 1500}, () => ({x: 0.2 + Math.random()*0.6, y: 0.3 + Math.random()*0.4}));
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        ctx.fillStyle = `rgba(${colors.random}, 0.85)`;
+        sampleData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Random Sample", color: `rgba(${colors.random}, 0.9)` }]);
+
+        const layer = document.getElementById('annotationsLayer'); 
+        if (APP_STATE.step1.circles) {
+            const container = document.getElementById('canvasArea');
+            const c1_x = pad + (0.38 * plotW); const c1_y = (container.clientHeight - pad) - (0.45 * plotH);
+            const c2_x = pad + (0.55 * plotW); const c2_y = (container.clientHeight - pad) - (0.67 * plotH);
+            const c3_x = pad + (0.65 * plotW); const c3_y = (container.clientHeight - pad) - (0.6 * plotH);
+
+            layer.innerHTML = `
+                <div style="position: absolute; border: 2px dashed var(--cyan); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${c1_x}px; top: ${c1_y}px; background: rgba(${colors.random}, 0.05);"></div>
+                <div style="position: absolute; border: 2px dashed var(--cyan); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${c2_x}px; top: ${c2_y}px; background: rgba(${colors.random}, 0.05);"></div>
+                <div style="position: absolute; border: 2px dashed var(--cyan); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c3_x}px; top: ${c3_y}px; background: rgba(${colors.random}, 0.05);"></div>
+            `;
+        } else { layer.innerHTML = ''; }
+    }
+   
+    function showFullPlot() {
+        document.getElementById('btnStep3').style.display = 'none'; 
+        document.getElementById('step3Toggles').style.display = 'flex';
+        APP_STATE.step3.circles = true;
+        
+        const toggleBtn = document.getElementById('btnToggle3Circles');
+        if (toggleBtn) { toggleBtn.classList.add('active'); toggleBtn.querySelector('.icon-eye').innerText = '👁️'; }
+        
+        updateChat(TOUR_STEPS[3].chat);
+        renderStep3Canvas(); 
+        revealNextStepCard(4);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+    function toggleStep3Circles() {
+        APP_STATE.step3.circles = !APP_STATE.step3.circles;
+        const el = document.getElementById('btnToggle3Circles');
+        if (APP_STATE.step3.circles) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+        else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        renderStep3Canvas();
+    }
+
+    function renderStep3Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        ctx.fillStyle = `rgba(${colors.raw}, 0.5)`;
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` }]);
+
+        const layer = document.getElementById('annotationsLayer');
+        if (APP_STATE.step3.circles) {
+            const container = document.getElementById('canvasArea');
+            const c1_x = pad + (0.38 * plotW); const c1_y = (container.clientHeight - pad) - (0.45 * plotH);
+            const c2_x = pad + (0.55 * plotW); const c2_y = (container.clientHeight - pad) - (0.67 * plotH);
+            const c3_x = pad + (0.65 * plotW); const c3_y = (container.clientHeight - pad) - (0.6 * plotH);
+            const c4_x = pad + (0.15 * plotW); const c4_y = (container.clientHeight - pad) - (0.52 * plotH);
+            const c5_x = pad + (0.82 * plotW); const c5_y = (container.clientHeight - pad) - (0.42 * plotH);
+
+            layer.innerHTML = `
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c1_x}px; top: ${c1_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c2_x}px; top: ${c2_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 150px; height: 150px; left: ${c3_x}px; top: ${c3_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--pink); border-radius: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; left: ${c4_x}px; top: ${c4_y}px; background: rgba(${colors.blue_noise}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--pink); border-radius: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; left: ${c5_x}px; top: ${c5_y}px; background: rgba(${colors.blue_noise}, 0.08);"></div>
+            `;
+        } else { layer.innerHTML = ''; }
+    }
+
+    
+    function toggleLayer(layerName, targetStep) {
+        APP_STATE.layers[layerName] = !APP_STATE.layers[layerName];
+        document.querySelectorAll(`.toggle-${layerName}`).forEach(el => {
+            if (APP_STATE.layers[layerName]) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+            else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        });
+        if (APP_STATE.currentStep !== targetStep) { executeStep(targetStep); } 
+        else { if (APP_STATE.currentStep === 4) renderStep4(); }
+    }
+
+    function startAutopsy() {
+        const btn = document.getElementById('btnStep4'); btn.innerHTML = "🔄 Reset Autopsy";
+        document.getElementById('step4Toggles').style.display = 'flex'; executeStep(4);
+    }
+
+    function renderStep4() {
+        const ds = APP_STATE.dataset; const k = APP_STATE.sampleSize; const colors = getThemeColors();
+        let sampleData = precomputedData?.[ds]?.[k]?.["random"] || [];
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+
+        if (APP_STATE.layers.raw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` });
+        }
+        if (APP_STATE.layers.sample) {
+            ctx.fillStyle = `rgba(${colors.random}, 0.85)`; 
+            sampleData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Random Sample", color: `rgba(${colors.random}, 0.9)` });
+        }
+        updateLegend(legendItems); updateChat(TOUR_STEPS[4].chat);
+
+        const layer = document.getElementById('annotationsLayer'); const container = document.getElementById('canvasArea');
+        const cx1 = pad + (0.12 * plotW); const cy1 = (container.clientHeight - pad) - (0.95 * plotH);
+        const cx2 = pad + (0.90 * plotW); const cy2 = (container.clientHeight - pad) - (0.15 * plotH);
+
+        if(APP_STATE.layers.annotations) {
+            const cw = container.clientWidth;
+            
+            layer.innerHTML = `
+                <div class="chart-annotation" style="left: ${cx1}px; top: ${cy1}px; border-left-color: var(--orange); max-width: 42%;">
+                    <div class="anno-title">Lost cluster-I</div>Random sample missed this smaller left cluster.
+                </div>
+                
+                <div class="chart-annotation right-align" style="right: ${cw - cx2}px; top: ${cy2 - 40}px; border-right-color: var(--orange); max-width: 42%;">
+                    <div class="anno-title">Lost cluster-II</div>It did not sample enough points to preserve this cluster.
+                </div>
+            `;
+        } else { layer.innerHTML = ''; }
+    }
+
+    function startStep5() {
+        executeStep(5); 
+        revealNextStepCard(5);
+        updateChat(TOUR_STEPS[5].chat); 
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+   function changeBudget5(sliderValue) {
+        APP_STATE.step5.budgetIndex = parseInt(sliderValue);
+        let rawVal = APP_STATE.step5.budgets[APP_STATE.step5.budgetIndex];
+        let displayRatio = rawVal.includes("All") ? "10150 / 10150" : `${rawVal} / 10150`;
+        document.getElementById('budgetValueDisp').innerText = displayRatio;
+        
+        if (APP_STATE.currentStep !== 5) {
+            executeStep(5);
+            updateChat(TOUR_STEPS[5].chat);
+        }
+        renderStep5();
+    }
+    
+    function toggleStep5Raw() {
+        APP_STATE.step5.showRaw = !APP_STATE.step5.showRaw; const el = document.getElementById('btnToggle5Raw');
+        el.classList.toggle('active', APP_STATE.step5.showRaw); el.querySelector('.icon-eye').innerText = APP_STATE.step5.showRaw ? '👁️' : '❌';
+        renderStep5();
+    }
+
+    function setSampler5(samplerId) {
+        APP_STATE.step5.activeSampler = samplerId;
+        if (!APP_STATE.step5.visitedSamplers.includes(samplerId)) APP_STATE.step5.visitedSamplers.push(samplerId);
+
+        document.querySelectorAll('.step5-sampler').forEach(el => el.classList.remove('active'));
+        const configMap = { 'random': 'btnSamRandom', 'vas': 'btnSamVas', 'density': 'btnSamDensity', 'blue_noise': 'btnSamBlueNoise', 'max_min': 'btnSamMaxMin' };
+        document.getElementById(configMap[samplerId]).classList.add('active');
+        
+        let chatText = `Alright, here is the Sampler Playground!<br><br>Let's try switching between the algorithms and adjusting the slider. I want to <span class="txt-highlight">capture the three core trends and two smaller ones</span>.<br><br>` + SAMPLER_CHATS[samplerId];
+        
+       if (APP_STATE.step5.visitedSamplers.length === 5 && !APP_STATE.step5.proceedClicked) {
+            const btnTakeaways = document.getElementById('btnToggle5Takeaways');
+            if (btnTakeaways) btnTakeaways.style.display = 'flex'; 
+            
+            chatText += `<br><br><div style="border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 8px;"><strong><span class="txt-success">All algorithms explored!</span></strong><br>Click <strong>💡 Toggle Evaluation Takeaways</strong> to see a summary of the samplers!</div>`;
+            setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+        }
+
+
+        updateChat(chatText);
+        if (APP_STATE.currentStep !== 5) executeStep(5);
+        renderStep5();
+    }
+
+   function toggleStep5Takeaways() {
+        APP_STATE.step5.showTakeaways = !APP_STATE.step5.showTakeaways; 
+        const el = document.getElementById('btnToggle5Takeaways');
+        
+        if (APP_STATE.step5.showTakeaways) {
+            el.classList.add('active'); 
+            el.querySelector('.icon-eye').innerText = '👁️';
+            
+            // UNLOCK THE PROCEED BUTTON HERE!
+            document.getElementById('btnGoStep7').style.display = 'flex';
+            
+            // THE NEW NARRATIVE UPDATE:
+            const takeawayChat = `Wow, exploring all these algorithms reveals a clear pattern! I've overlaid the key takeaways directly onto the plot.<br><br>We can see that standard algorithms are forced to trade off between preserving <strong>Density</strong> (Statistical) and maximizing <strong>Distance</strong> (Coverage). Blue-Noise tries to do both, but at a massive computational cost.<br><br>The conclusion is clear: to get the perfect sample without breaking the budget, we must explicitly define which regions of the visualization attract human attention. <br><br><strong>Click "Proceed to Human Visual Targets" below to continue!</strong>`;
+            updateChat(takeawayChat);
+            
+        } else {
+            el.classList.remove('active'); 
+            el.querySelector('.icon-eye').innerText = '❌';
+            
+            // Optional: Revert to a prompt if they turn it off
+            updateChat(`I've hidden the takeaways so you can see the plot again. Click the toggle to bring them back, or hit Proceed when you are ready!`);
+        }
+        
+        renderStep5();
+    }
+    
+    function renderStep5() {
+        const ds = APP_STATE.dataset; const currentBudget = APP_STATE.step5.budgets[APP_STATE.step5.budgetIndex]; 
+        const activeSamp = APP_STATE.step5.activeSampler; const colors = getThemeColors();
+        
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        if (APP_STATE.step5.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`;
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` });
+        }
+
+       const colorMap = { 
+            'random': { rgb: colors.random, label: 'Random Sample' }, 
+            'vas': { rgb: colors.vas, label: 'VAS Sample' }, 
+            'density': { rgb: colors.density, label: 'Density Sample' }, 
+            'blue_noise': { rgb: colors.blue_noise, label: 'Blue-Noise Sample' },
+            'max_min': { rgb: colors.max_min, label: 'Max-Min Sample' }
+        };
+
+        let sData;
+        if (currentBudget.includes("All")) {
+            sData = rawData.length > 0 ? rawData : Array.from({length: 10150}, () => ({x: Math.random(), y: Math.random()}));
+        } else {
+            sData = precomputedData?.[ds]?.[currentBudget]?.[activeSamp] || Array.from({length: parseInt(currentBudget)}, () => ({x: Math.random(), y: Math.random()}));
+        }
+
+        ctx.fillStyle = `rgba(${colorMap[activeSamp].rgb}, 0.85)`;
+        sData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        legendItems.push({ label: colorMap[activeSamp].label, color: `rgba(${colorMap[activeSamp].rgb}, 0.9)` });
+        updateLegend(legendItems);
+
+      const layer = document.getElementById('annotationsLayer');
+        
+        if (APP_STATE.step5.showTakeaways) {
+            const container = document.getElementById('canvasArea');
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+
+            // Notice: The inline 'background: ...' properties have been entirely removed!
+            layer.innerHTML = `
+                <div class="chart-annotation" style="left: ${pad}px; top: 20px; border-left-color: var(--orange); width: 300px; font-size: 13.5px; padding: 16px;">
+                    <div class="anno-title" style="color: var(--orange); font-size: 12px;">1. Statistical (Random, DBS)</div>
+                    Capture dense areas, but fail to map boundaries, shapes, or isolated smaller trends.
+                </div>
+                
+                <div class="chart-annotation right-align" style="left: ${cw - 320 - pad}px; top: 20px; border-right-color: var(--purple); width: 300px; font-size: 13.5px; padding: 16px;">
+                    <div class="anno-title" style="color: var(--purple); font-size: 12px;">2. Coverage (VAS, Max-Min)</div>
+                    Optimize for maintaining distance among the sampled points. Great coverage, but destroys relative density patterns.
+                </div>
+                
+                <div class="chart-annotation" style="left: ${pad}px; top: ${ch - 140 - pad}px; border-left-color: var(--pink); width: 300px; font-size: 13.5px; padding: 16px;">
+                    <div class="anno-title" style="color: var(--pink); font-size: 12px;">3. Balanced (Blue-Noise)</div>
+                    Enforces distance constraints. Computationally very expensive, and smaller clusters are not visible in small samples.
+                </div>
+                
+                <div class="chart-annotation right-align" style="left: ${cw - 360 - pad}px; top: ${ch - 170 - pad}px; border-right-color: var(--cyan); width: 340px; border: 1px solid var(--cyan); font-size: 14px; padding: 20px;">
+                    <div class="anno-title" style="color: var(--cyan); font-size: 14px;">Conclusion</div>
+                    <strong>Existing objectives have limitations.</strong> We need a different strategy that will allow samples to better preserve the areas of interest. First, we must understand what humans care about in a visualization!
+                </div>
+            `;
+        } else {
+            layer.innerHTML = ''; 
+        }
+    
+    }
+    
+    
+    // ==========================================
+    // 4. CANVAS RENDERERS (STEPS 7 TO 11)
+    // ==========================================
+
+   function transitionToStep7() {
+        APP_STATE.step5.proceedClicked = true;
+        document.getElementById('btnGoStep7').style.display = 'none';
+        revealNextStepCard(7); executeStep(7); updateChat(TOUR_STEPS[7].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+    
+    function toggleStep7All() {
+        APP_STATE.step7.gazes = !APP_STATE.step7.gazes;
+        APP_STATE.step7.comments = APP_STATE.step7.gazes; // Keep them synced
+        
+        const el = document.querySelector('.step7-toggle');
+        el.classList.toggle('active', APP_STATE.step7.gazes); 
+        el.querySelector('.icon-eye').innerText = APP_STATE.step7.gazes ? '👁️' : '❌';
+        
+        renderStep7Canvas();
+    }
+
+    function renderStep7Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` }]);
+
+        const layer = document.getElementById('annotationsLayer'); const container = document.getElementById('canvasArea');
+        const cx1 = pad + (0.35 * plotW); const cy1 = (container.clientHeight - pad) - (0.15 * plotH);
+        const cx2 = pad + (0.01 * plotW); const cy2 = (container.clientHeight - pad) - (0.85 * plotH);
+        const cx3 = pad + (0.99 * plotW); const cy3 = (container.clientHeight - pad) - (0.80 * plotH);
+
+        let html = '';
+        if (APP_STATE.step7.gazes) {
+            html += `
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${pad + (0.38 * plotW)}px; top: ${(container.clientHeight - pad) - (0.45 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 120px; height: 120px; left: ${pad + (0.55 * plotW)}px; top: ${(container.clientHeight - pad) - (0.7 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${pad + (0.65 * plotW)}px; top: ${(container.clientHeight - pad) - (0.6 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${pad + (0.15 * plotW)}px; top: ${(container.clientHeight - pad) - (0.52 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${pad + (0.82 * plotW)}px; top: ${(container.clientHeight - pad) - (0.42 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+            `;
+        }
+        if (APP_STATE.step7.comments) {
+            html += `
+                <div class="chart-annotation" style="left: ${cx1 + 40}px; top: ${cy1 - 40}px; border-left-color: var(--gold); width: 220px;">
+                    <div class="anno-title" style="color: var(--gold);">i) The Core Region</div>The eye immediately targets the three major trends in the center.
+                </div>
+                <div class="chart-annotation" style="left: ${cx2 + 40}px; top: ${cy2 - 20}px; border-left-color: var(--gold); width: 210px;">
+                    <div class="anno-title" style="color: var(--gold);">ii) Left Cluster</div>The eye naturally detects this separate dense group.
+                </div>
+                <div class="chart-annotation right-align" style="left: ${cx3 - 180}px; top: ${cy3 - 20}px; border-right-color: var(--gold); width: 210px;">
+                    <div class="anno-title" style="color: var(--gold);">iii) Right Cluster</div>The eye is drawn across the plot to this distinct region.
+                </div>
+            `;
+        }
+        layer.innerHTML = html;
+    }
+
+    function transitionToStep8() {
+        document.getElementById('btnGoStep8').style.display = 'none';
+        revealNextStepCard(8); executeStep(8); updateChat(TOUR_STEPS[8].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+    function getViridisColor(t) {
+        t = Math.max(0, Math.min(1, t));
+        const stops = [{ t: 0.00, r: 68, g: 1, b: 84 }, { t: 0.25, r: 59, g: 82, b: 139 }, { t: 0.50, r: 33, g: 145, b: 140 }, { t: 0.75, r: 94, g: 201, b: 98 }, { t: 1.00, r: 253, g: 231, b: 37 }];
+        let i = 0; while (i < stops.length - 2 && t >= stops[i+1].t) { i++; }
+        let s1 = stops[i], s2 = stops[i+1]; let percent = (t - s1.t) / (s2.t - s1.t);
+        return { r: Math.floor(s1.r + percent * (s2.r - s1.r)), g: Math.floor(s1.g + percent * (s2.g - s1.g)), b: Math.floor(s1.b + percent * (s2.b - s1.b)) };
+    }
+
+    function updateSaliencyThreshold(val) {
+        APP_STATE.step8.threshold = parseFloat(val);
+        document.getElementById('salThresholdDisp').innerText = val;
+        
+        if (APP_STATE.currentStep !== 8) { executeStep(8); updateChat(TOUR_STEPS[8].chat); }
+        renderStep8Canvas();
+    }
+
+    function renderStep8Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        const baseOpacity = APP_STATE.step8.computed ? 0.15 : 0.5; 
+        ctx.fillStyle = `rgba(${colors.raw}, ${baseOpacity})`; 
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+
+        let legendItems = [{ label: APP_STATE.step8.computed ? "Original Data (Faded)" : "Original Data", color: `rgba(${colors.raw}, ${baseOpacity})` }];
+        const layer = document.getElementById('annotationsLayer');
+
+        if (APP_STATE.step8.computed) {
+            layer.innerHTML = ''; 
+            const threshold = APP_STATE.step8.threshold;
+            rawData.forEach(pt => {
+                const score = pt.saliency !== undefined ? pt.saliency : Math.max(0, 1 - (Math.hypot(pt.x-0.35, pt.y-0.75)*2));
+                if (score >= threshold) { 
+                    const color = getViridisColor(score);
+                    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+                    ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill();
+                }
+            });
+            legendItems.push({ label: "High Visual Saliency", color: "var(--gold)" });
+        } else { layer.innerHTML = ''; }
+        updateLegend(legendItems);
+    }
+
+    function startStep10() {
+        document.getElementById('btnGoStep10').style.display = 'none';
+        revealNextStepCard(10); executeStep(10); updateChat(TOUR_STEPS[10].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+    function renderStep10Static() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+        
+        let legendItems = [];
+        
+        if (APP_STATE.step10.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.15)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data (Faded)", color: `rgba(${colors.raw}, 0.15)` });
+        }
+        
+        legendItems.push({ label: "PAWS Selection", color: `rgba(${colors.paws}, 0.9)` });
+        
+        if (APP_STATE.step10.orderedPoints && APP_STATE.step10.currentIndex > 0) {
+            ctx.fillStyle = `rgba(${colors.paws}, 0.9)`;
+            for (let j = 0; j < APP_STATE.step10.currentIndex; j++) {
+                let pt = APP_STATE.step10.orderedPoints[j];
+                ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        
+        updateLegend(legendItems);
+        if (APP_STATE.step10.currentIndex === 0) {
+            document.getElementById('annotationsLayer').innerHTML = '';
+        }
+    }
+
+    function toggleStep10Raw() {
+        APP_STATE.step10.showRaw = !APP_STATE.step10.showRaw; 
+        const el = document.getElementById('btnToggle10Raw');
+        if (el) {
+            el.classList.toggle('active', APP_STATE.step10.showRaw); 
+            el.querySelector('.icon-eye').innerText = APP_STATE.step10.showRaw ? '👁️' : '❌';
+        }
+        renderStep10Static();
+    }
+
+    function runPawsAnimation() {
+        const btn = document.getElementById('btnPlayPaws');
+        const resumeBtn = document.getElementById('btnResumePaws');
+        if(resumeBtn) resumeBtn.style.display = 'none'; 
+        if(btn) { btn.innerHTML = "⏳ Computing Selection Order..."; btn.disabled = true; }
+        
+        document.getElementById('annotationsLayer').innerHTML = ''; 
+        APP_STATE.step10.animating = false;
+
+        if (APP_STATE.currentStep !== 10) { 
+            executeStep(10); 
+            updateChat(TOUR_STEPS[10].chat); 
+        }
+
+        const ds = APP_STATE.dataset;
+        let pawsData = precomputedData?.[ds]?.["1500"]?.["paws"] || Array.from({length: 1500}, () => ({x: Math.random(), y: Math.random(), perception: Math.random()}));
+
+        setTimeout(() => {
+            if (APP_STATE.currentStep !== 10) return;
+
+            let startIdx = 0; let orderedPoints = [pawsData[startIdx]]; 
+            let unselected = [...pawsData]; unselected.splice(startIdx, 1); 
+            
+            let minDistances = new Array(unselected.length).fill(Infinity);
+            for (let i = 0; i < unselected.length; i++) { minDistances[i] = Math.hypot(unselected[i].x - orderedPoints[0].x, unselected[i].y - orderedPoints[0].y); }
+            
+            while(unselected.length > 0) {
+                let bestIdx = -1; let maxScore = -Infinity;
+                for(let i=0; i<unselected.length; i++) {
+                    let w_y = unselected[i].perception || unselected[i].saliency || 0.5;
+                    let score = w_y * minDistances[i]; 
+                    if(score > maxScore) { maxScore = score; bestIdx = i; }
+                }
+                
+                let nextPt = unselected[bestIdx]; orderedPoints.push(nextPt);
+                unselected.splice(bestIdx, 1); minDistances.splice(bestIdx, 1);
+                
+                for(let i=0; i<unselected.length; i++) {
+                    let d = Math.hypot(unselected[i].x - nextPt.x, unselected[i].y - nextPt.y);
+                    if(d < minDistances[i]) minDistances[i] = d;
+                }
+            }
+            
+            if(btn) btn.innerHTML = "▶️ Animating PAWS..."; 
+            APP_STATE.step10.animating = true; 
+            animatePawsDrawing(orderedPoints, btn);
+        }, 50); 
+    }
+
+    function animatePawsDrawing(orderedPoints, btn) {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        APP_STATE.step10.orderedPoints = orderedPoints;
+        APP_STATE.step10.currentIndex = 0;
+        APP_STATE.step10.isPaused = false;
+        
+        renderStep10Static();
+
+        const layer = document.getElementById('annotationsLayer');
+        let i = 0; 
+        
+        // THE STATE MACHINE: Tracks which pause we are currently on
+        let pausePhase = 0; 
+
+        window.resumePaws = function() {
+            APP_STATE.step10.isPaused = false;
+            document.getElementById('btnResumePaws').style.display = 'none';
+            
+            if (pausePhase === 1) {
+                // Resume from Pause 1: Clear the layer and keep drawing
+                pausePhase = 2;
+                layer.innerHTML = '';
+            } else if (pausePhase === 3) {
+                // Resume from Pause 2: Move the message to the Top-Left permanently!
+                pausePhase = 4;
+                layer.innerHTML = `
+                    <div class="chart-annotation" style="left: 60px; top: 30px; border-left-color: var(--cyan); border-left-width: 3px; width: 280px; text-align: left; animation: none; opacity: 1; transform: translateY(0);">
+                        <div class="anno-title" style="color: var(--cyan);">Objective</div>
+                        PAWS balances picking points in <strong>all salient regions</strong> while maintaining <strong>global spatial coverage</strong>.
+                    </div>
+                `;
+            }
+
+            
+            
+            drawNextFrame();
+        };
+
+        function drawNextFrame() {
+            if (!APP_STATE.step10.animating || APP_STATE.currentStep !== 10 || APP_STATE.step10.isPaused) return;
+
+            const container = document.getElementById('canvasArea');
+            const activeCtx = container.querySelector('canvas').getContext('2d');
+            activeCtx.fillStyle = `rgba(${colors.paws}, 0.9)`;
+
+            // --- PAUSE 1: Focus on Saliency / Core Trends (Triggered at 200 points) ---
+            if (i >= 100 && pausePhase === 0) {
+                pausePhase = 1;
+                if(btn) btn.innerHTML = "⌛ Analyzing Selection...";
+                
+                setTimeout(() => {
+                    if (APP_STATE.currentStep !== 10) return;
+                    APP_STATE.step10.isPaused = true;
+                    document.getElementById('btnResumePaws').style.display = 'flex';
+                    if(btn) btn.innerHTML = "⏸️ Paused for Observation";
+                    
+                    const cx = 80 + (0.5 * (container.clientWidth - 50)); 
+                    // Change the 0.2 to 0.05 to push it much closer to the top border
+                    const cy = 10 + (0.03 * (container.clientHeight - 50));
+                    
+                    layer.innerHTML = `
+                        <div class="chart-annotation" style="left: ${cx - 130}px; top: ${cy}px; border-left-color: var(--gold); border-right-color: var(--gold); border-left-width: 3px; border-right-width: 3px; width: 260px; text-align: center;">
+                            <div class="anno-title" style="color: var(--gold);">Preserving Trends</div>
+                            PAWS prioritizes sampling points from the <strong>salient areas</strong> to preserve the core trends.
+                        </div>
+                    `;
+                }, 800); 
+                return; 
+            }
+
+            // --- PAUSE 2: Focus on Max-Min / Coverage (Triggered at 600 points) ---
+            if (i >= 250 && pausePhase === 2) {
+                pausePhase = 3;
+                if(btn) btn.innerHTML = "⌛ Analyzing Coverage...";
+                
+                setTimeout(() => {
+                    if (APP_STATE.currentStep !== 10) return;
+                    APP_STATE.step10.isPaused = true;
+                    document.getElementById('btnResumePaws').style.display = 'flex';
+                    if(btn) btn.innerHTML = "⏸️ Paused for Observation";
+                    
+                    const cx = 40 + (0.5 * (container.clientWidth - 50)); 
+                    const cy = 40 + (0.7 * (container.clientHeight - 50));
+                    
+                    layer.innerHTML = `
+                        <div class="chart-annotation" style="left: ${cx - 140}px; top: ${cy}px; border-left-color: var(--cyan); border-right-color: var(--cyan); border-left-width: 3px; border-right-width: 3px; width: 280px; text-align: center;">
+                            <div class="anno-title" style="color: var(--cyan);">Ensuring Coverage</div>
+                            But, similar to <strong>Max-Min</strong>, at each step, it samples a new <strong>salient point</strong> that <strong>maximizes</strong> the distance from already sampled points.
+                        </div>
+                    `;
+                }, 800); 
+                return; 
+            }
+
+            // --- FINISH LINE ---
+            if (i >= orderedPoints.length) {
+                APP_STATE.step10.animating = false; 
+                if(btn) { btn.innerHTML = "🔄 Replay Animation"; btn.disabled = false; }
+                document.getElementById('btnGoStep11').classList.remove('hidden');
+                return;
+            }
+            
+            // Drawing logic
+            let batchSize = (i < 200) ? 2 : 20; 
+            let limit = Math.min(i + batchSize, orderedPoints.length);
+            for (; i < limit; i++) {
+                let pt = orderedPoints[i];
+                activeCtx.beginPath(); 
+                activeCtx.arc(40 + (pt.x * (container.clientWidth - 80)), (container.clientHeight - 40) - (pt.y * (container.clientHeight - 80)), APP_STATE.markerSize, 0, Math.PI * 2); activeCtx.fill();
+            }
+
+            APP_STATE.step10.currentIndex = i;
+            if(btn) btn.innerHTML = `▶️ Animating PAWS... (${i} / ${orderedPoints.length})`;
+            requestAnimationFrame(drawNextFrame);
+        }
+        
+        drawNextFrame();
+    }
+    
+    function resumePawsAnimation() {
+        if (window.resumePaws) window.resumePaws();
+    }
+
+    function startStep11() {
+        document.getElementById('btnGoStep11').style.display = 'none';
+        revealNextStepCard(11); executeStep(11); updateChat(TOUR_STEPS[11].chat); renderStep11Canvas();
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+    function changePawsBudget(val) {
+        APP_STATE.step11.budgetIndex = parseInt(val);
+        let rawVal = APP_STATE.step11.budgets[APP_STATE.step11.budgetIndex];
+        let displayRatio = rawVal.includes("All") ? "10150 / 10150" : `${rawVal} / 10150`;
+        document.getElementById('pawsBudgetValue').innerText = displayRatio;
+        
+        if (APP_STATE.currentStep !== 11) {
+            executeStep(11);
+            updateChat(TOUR_STEPS[11].chat);
+        }
+        renderStep11Canvas();
+    }
+
+    function toggleStep11Layer(layer) {
+        APP_STATE.step11.layers[layer] = !APP_STATE.step11.layers[layer]; const el = document.querySelector(`.step11-${layer}`);
+        el.classList.toggle('active', APP_STATE.step11.layers[layer]); el.querySelector('.icon-eye').innerText = APP_STATE.step11.layers[layer] ? '👁️' : '❌';
+        renderStep11Canvas();
+    }
+
+    function renderStep11Canvas() {
+        const ds = APP_STATE.dataset; const currentBudget = APP_STATE.step11.budgets[APP_STATE.step11.budgetIndex]; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas(); let legendItems = [];
+
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        if (APP_STATE.step11.layers.raw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.6)` });
+        }
+
+        if (APP_STATE.step11.layers.sample) {
+            let pawsData;
+            if (currentBudget.includes("All")) {
+                pawsData = rawData.length > 0 ? rawData : Array.from({length: 10150}, () => ({x: Math.random(), y: Math.random()}));
+            } else {
+                pawsData = precomputedData?.[ds]?.[currentBudget]?.["paws"] || Array.from({length: parseInt(currentBudget)}, () => ({x: Math.random(), y: Math.random()}));
+            }
+            ctx.fillStyle = `rgba(${colors.paws}, 0.85)`;
+            pawsData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "PAWS Sample", color: `rgba(${colors.paws}, 0.9)` });
+        }
+        updateLegend(legendItems);
+    }
+    
+    // Start the navigation engine!
+    enableNonLinearNavigation();
+
+    // Redraw the canvas cleanly when the browser window is resized
+    window.addEventListener('resize', () => {
+        clearTimeout(window.resizeTimer);
+        window.resizeTimer = setTimeout(redrawCurrentCanvas, 150);
+    });
+
+</script>
+
+</body>
+</html>
