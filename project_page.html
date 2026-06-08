@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perception-Aware Sampling - Project Page</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f14; --surface: #16161d; --surface2: #1e1e28;
+            --border: #2a2a3a; --text: #e4e4ed; --text2: #8888a0;
+            --cyan: #4ecdc4; --orange: #ffab4c; --blue: #6b8afd;
+            --green: #45e89d; --pink: #ff6bf0; --purple: #a87ffb;
+            --gold: #ffc83d; --red: #ff4757;
+        }
+
+        body.light-theme {
+            --bg: #f4f4f9; --surface: #ffffff; --surface2: #e4e4ed;
+            --border: #cdd0dc; --text: #16161d; --text2: #5a5a72;
+            --cyan: #0d9488; --orange: #ea580c; --blue: #4f46e5;
+            --green: #059669; --pink: #db2777; --purple: #7c3aed;
+            --gold: #d97706; --red: #dc2626;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+
+        header { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; font-weight: 700; font-size: 18px; color: var(--cyan); }
+        
+        .container { max-width: 900px; margin: 60px auto; padding: 0 24px; }
+        
+        .title { font-size: 36px; font-weight: 800; line-height: 1.2; margin-bottom: 16px; color: var(--text); }
+        .authors { font-size: 16px; color: var(--cyan); margin-bottom: 8px; font-weight: 500; }
+        .affiliations { font-size: 14px; color: var(--text2); margin-bottom: 40px; line-height: 1.8; }
+
+        .badges { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 40px; }
+        .badge { background: var(--surface2); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; text-decoration: none; transition: 0.2s; }
+        .badge:hover { background: var(--border); transform: translateY(-2px); }
+
+        h2 { font-size: 22px; color: var(--text); margin-top: 48px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        h3 { font-size: 18px; color: var(--text); margin-top: 24px; margin-bottom: 12px; }
+        
+        p { margin-bottom: 16px; color: var(--text2); font-size: 15px; }
+        
+        .highlight-box { background: var(--surface2); border: 1px solid var(--border); border-left: 4px solid var(--cyan); padding: 24px; border-radius: 8px; margin-bottom: 32px; font-size: 15px; color: var(--text); }
+
+        ul { margin-left: 24px; margin-bottom: 24px; color: var(--text2); font-size: 15px; }
+        li { margin-bottom: 8px; }
+        li strong { color: var(--text); }
+
+        .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; margin-bottom: 48px; }
+        .demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 32px 24px; text-align: center; text-decoration: none; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; }
+        .demo-card:hover { border-color: var(--cyan); transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.2); }
+        body.light-theme .demo-card:hover { box-shadow: 0 12px 24px rgba(0,0,0,0.05); }
+        
+        .card-icon { font-size: 48px; margin-bottom: 16px; }
+        .card-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+        .card-desc { font-size: 13px; color: var(--text2); }
+
+        .btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .btn:hover { background: var(--border); }
+
+        .citation { background: var(--surface); border: 1px dashed var(--border); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; color: var(--text2); overflow-x: auto; white-space: pre-wrap; margin-bottom: 60px; }
+
+        @media (max-width: 768px) {
+            .demo-grid { grid-template-columns: 1fr; }
+            .title { font-size: 28px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>Perception-aware Sampling (PAWS)</div>
+        <button class="btn" onclick="toggleTheme()">🌓 Toggle Theme</button>
+    </header>
+
+    <div class="container">
+        <h1 class="title">Perception-aware Sampling for Scatterplot Visualizations</h1>
+        
+        <div class="authors">Zafeiria Moumoulidou, Redwan Ahmed Rizvee, Alexandra Meliou</div>
+        <div class="affiliations">
+            <strong>Zafeiria Moumoulidou:</strong> Collaborator (Currently at Facebook) <br>
+            <strong>Redwan Ahmed Rizvee:</strong> PhD Student (UMass Amherst) <br>
+            <strong>Alexandra Meliou:</strong> Primary Investigator (UMass Amherst)<br>
+            <strong>
+                Other Collaborators: </strong>Hamza Elhamdadi (Stonehill College), Ke Yang (University of Texas at San Antonio), 
+                Subrata Mitra (Adobe Research), Cindy Xiong Bearfield (Georgia Tech). 
+        </div>
+
+        <div class="badges">
+            <a href="https://arxiv.org/abs/2504.20369" target="_blank" class="badge">📄 arXiv:2504.20369</a>
+            <a href="#interactive-demos" class="badge" style="border-color: var(--cyan); color: var(--cyan);">🎮 Jump to Interactive Demos</a>
+        </div>
+
+        <h2>Summary</h2>
+        <div class="highlight-box">
+            Visualizing data is often central in data analytics workflows, but growing data sizes pose challenges due to computational and visual perception limitations (e.g., visual clutter). 
+            As a result, data analysts commonly down-sample their data and work with subsets. Deriving visually representative samples, however, remains a challenge. We focuses on scatterplots, a widely-used visualization type, and introduces a novel sampling objective—perception-awareness—aiming to improve sample efficacy by targeting how humans perceive a visualization.
+        </div>
+
+        <h2>Key Contributions</h2>
+        <p>Existing sampling methods frequently optimize for preserving data-driven properties like outliers, relative densities, or spatial separation. However, even when statistical properties are preserved, they may appear distorted to human users if the sampling algorithm ignores human visual perception. To address this, we introduce the following core contributions:</p>
+        <ul>
+            <li>
+                <strong>Perception-Aware Sampling (PAWS):</strong> A novel data selection method built on top of <strong>perception-augmented databases</strong>. It leverages computer vision techniques (saliency maps) to predict human attention focus by modeling perception-awareness. It applies coverage objective to include all the visually important (salient) regions of the scatterplot so that the sample remains representative of the original data from a visual perspective.
+            </li>
+            <li><strong>Perceptual Similarity Metrics:</strong> The introduction of perceptual similarity as a metric for sample quality, utilizing established image similarity metrics (like SSIM) to compare saliency maps across visualizations.</li>
+            <li><strong>Robust Evaluation:</strong> Extensive experimental evaluations and a comprehensive user study demonstrating that PAWS consistently outperforms prior art in maintaining structural similarity and is significantly preferred by human analysts.</li>
+        </ul>
+
+         <figure style="text-align: center; margin: 32px 0;">
+            
+            <img src="project_page_images/all_comparison.jpg" alt="Modeling perception-awareness over the salient regions of the scatterplot" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+            
+            <figcaption style="margin-top: 12px; font-size: 14px; color: var(--text2); font-style: italic; line-height: 1.5; padding: 0 20px;">
+                <strong>Figure 1:</strong> A visual comparison of samples generated by different algorithms. The original scatterplot (top row, leftmost) contains three main clusters and two smaller trends.
+                Our contribution, PAWS (top row, rightmost) preserves the core three clusters along with the two smaller trends more visibly than the other methods.
+                The dataset contained 10,150 points. Samples were generated with around 15% of the original data. 
+            </figcaption>
+
+        </figure>
+
+        <h2>Methodology Overview</h2>
+        
+        <h3>1. Modeling Perception-awareness via Saliency</h3>
+        <p>
+           Our objective is that, an effective sample should preserve all the visually salient areas of the original dataset.
+           In this regard, we leverage saliency maps (Figure 2b) to model perception-awareness by generating heatmaps predicting eye-gaze locations. 
+           Through this awareness modeling, we computationally ensure more importance to the data points that form the regions of human visual attention within the plot (Figure 2c). 
+        </p>
+
+        <figure style="text-align: center; margin: 32px 0;">
+            
+            <img src="project_page_images/perception_awareness.jpg" alt="Modeling perception-awareness over the salient regions of the scatterplot" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+            
+            <figcaption style="margin-top: 12px; font-size: 14px; color: var(--text2); font-style: italic; line-height: 1.5; padding: 0 20px;">
+                <strong>Figure 2:</strong> Modeling perception-awareness using saliency maps.
+            </figcaption>
+
+        </figure>
+
+        <h3>2. The PAWS Algorithm</h3>
+        <p>PAWS balances saliency with global data coverage. Based on the Max-Min (farthest point) diversification heuristic, PAWS greedily builds a sample by selecting points that maximize a multiplicative score of their perception-awareness importance and their distance from already sampled points. 
+            This penalizes points with low awareness importance or those too close to the existing sample.</p>
+
+        
+        <div style="text-align: center; margin: 32px 0; display: flex; flex-direction: column; align-items: center;">
+            <video id="pawsVideo" width="100%" style="max-width: 700px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.3);" autoplay loop muted playsinline>
+                <source src="project_page_images/paws_animation.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            
+            <input type="range" id="videoSlider" min="0" max="100" value="0" style="width: 100%; max-width: 700px; margin-top: 16px; cursor: pointer; accent-color: var(--cyan);">
+            
+            <p style="font-size: 13px; color: var(--text2); margin-top: 12px; font-style: italic;">
+                Figure 3: An animation to observe how PAWS works. PAWS iteratively selects points by balancing visual saliency with spatial coverage.
+            </p>
+        </div>
+
+        <h2 id="interactive-demos">Interactive Demonstrations</h2>
+        <p>Experience the performance of Perception-Aware Sampling directly in your browser. We have prepared two interactive environments to showcase the failure points of traditional sampling and the advantages of the PAWS methodology.</p>
+
+        <div class="demo-grid">
+            <a href="index.html" class="demo-card" style="border-top: 4px solid var(--cyan);">
+                <div class="card-icon">🧭</div>
+                <div class="card-title">Part A: Guided Tutorial</div>
+                <div class="card-desc">A narrative-driven, step-by-step visual exploration explaining why standard algorithms fail and how PAWS balances spatial coverage with human visual targets.</div>
+            </a>
+            
+            <a href="application.html" class="demo-card" style="border-top: 4px solid var(--orange);">
+                <div class="card-icon">🕹️</div>
+                <div class="card-title">Part B: Application of PAWS</div>
+                <div class="card-desc">An open playground to test the PAWS algorithm over multiple real-world datasets.</div>
+            </a>
+        </div>
+
+        <h2>Citation</h2>
+        <p>If you find this work useful in your research, please consider citing our paper:</p>
+        <div class="citation">@article{moumoulidou2025perception,
+                title={Perception-aware Sampling for Scatterplot Visualizations},
+                author={Moumoulidou, Zafeiria and Elhamdadi, Hamza and Yang, Ke and Mitra, Subrata and Bearfield, Cindy Xiong and Meliou, Alexandra},
+                journal={arXiv preprint arXiv:2504.20369},
+                year={2025}
+        }</div>
+        
+    </div>
+
+    <script>
+        function toggleTheme() { 
+            document.body.classList.toggle('light-theme'); 
+        }
+
+        // --- Custom Video Scrubber Logic ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('pawsVideo');
+            const slider = document.getElementById('videoSlider');
+
+            if (video && slider) {
+                // 1. Update the slider as the video plays
+                video.addEventListener('timeupdate', () => {
+                    // Prevent dividing by zero before the video loads
+                    if (!video.duration) return; 
+                    const progress = (video.currentTime / video.duration) * 100;
+                    slider.value = progress;
+                });
+
+                // 2. Update the video when the user drags the slider
+                slider.addEventListener('input', (e) => {
+                    const scrubTime = (e.target.value / 100) * video.duration;
+                    video.currentTime = scrubTime;
+                });
+
+                // Optional: Pause the video while dragging for a smoother scrub
+                slider.addEventListener('mousedown', () => video.pause());
+                slider.addEventListener('mouseup', () => video.play());
+                slider.addEventListener('touchstart', () => video.pause());
+                slider.addEventListener('touchend', () => video.play());
+            }
+        });
+    </script>
+
+</body>
+</html>

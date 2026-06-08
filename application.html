@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PerVis</title>
+    <script src="demo_data.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f14; --surface: #16161d; --surface2: #1e1e28;
+            --border: #2a2a3a; --text: #e4e4ed; --text2: #8888a0;
+            --cyan: #4ecdc4; --orange: #ffab4c; --blue: #6b8afd;
+            --green: #45e89d; --pink: #ff6bf0; --purple: #a87ffb;
+            --gold: #ffc83d;
+            --red: #ff4757;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+        input[type=range] { accent-color: var(--purple); cursor: pointer; width: 100%; margin: 8px 0; }
+        
+        .app-container { display: grid; grid-template-columns: 1fr 350px 300px; grid-template-rows: 60px calc(100vh - 60px); height: 100vh; }
+        header { grid-column: 1 / -1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; font-weight: 700; font-size: 18px; color: var(--cyan); }
+
+        .viz-col { padding: 24px; display: flex; flex-direction: column; }
+        .controls-col { background: var(--surface); border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding: 24px; overflow-y: auto; }
+        .trisa-col { background: var(--surface); padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+        .step-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; transition: all 0.3s ease; }
+        .step-card.active { border-color: var(--cyan); box-shadow: 0 4px 16px rgba(78, 205, 196, 0.1); }
+        .step-card.hidden { display: none; opacity: 0; }
+
+        .step-label { font-size: 11px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .step-num { background: var(--border); color: var(--text); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; transition: 0.3s; }
+        .step-card.active .step-num { background: var(--cyan); color: var(--bg); }
+
+        .select-styled { width: 100%; padding: 10px 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 12px; outline: none; cursor: pointer; }
+        .select-styled:focus { border-color: var(--cyan); }
+
+        .btn { width: 100%; padding: 10px 14px; border: none; border-radius: 6px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-cyan { background: var(--cyan); color: var(--bg); }
+        .btn-orange { background: var(--orange); color: var(--bg); }
+        .btn-blue { background: var(--blue); color: var(--bg); }
+        .btn-green { background: var(--green); color: var(--bg); }
+        .btn-pink { background: var(--pink); color: var(--bg); }
+        .btn-purple { background: var(--purple); color: var(--bg); }
+        .btn-gold { background: var(--gold); color: #111; font-weight: bold; }
+        .btn-red { background: var(--red); color: #fff; font-weight: 600; }
+        .btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .viz-wrapper { position: relative; flex-grow: 1; display: flex; flex-direction: column; }
+        .canvas-container { flex-grow: 1; background: var(--canvas-bg, #000); border: 1px solid var(--border); border-radius: 12px; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+
+        .legend-panel { position: absolute; top: 16px; right: 16px; background: rgba(22, 22, 29, 0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; z-index: 10; display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s ease; }
+        .legend-panel.hidden { opacity: 0; pointer-events: none; }
+        .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 500; color: var(--text); }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+        .chat-bubble { background: var(--bg); border: 1px solid var(--border); padding: 16px; border-radius: 12px; border-bottom-left-radius: 4px; font-size: 14px; line-height: 1.6; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .txt-highlight { color: var(--cyan); font-weight: 600; }
+        .txt-warning { color: var(--orange); font-weight: 600; }
+        .txt-concept { color: var(--blue); font-weight: 600; }
+        .txt-success { color: var(--green); font-weight: 600; }
+        .txt-danger { color: var(--red); font-weight: 600; }
+        .txt-gold { color: var(--gold); font-weight: 600; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .annotation-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+        .chart-annotation { position: absolute; background: rgba(22, 22, 29, 0.85); backdrop-filter: blur(8px); border: 1px solid var(--border); border-left: 3px solid var(--orange); border-radius: 8px; padding: 14px; color: var(--text); font-size: 12px; line-height: 1.5; width: 260px; box-shadow: 0 12px 32px rgba(0,0,0,0.5); opacity: 0; transform: translateY(15px); animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.4s; }
+        .chart-annotation.right-align { border-left: 1px solid var(--border); border-right: 3px solid var(--orange); text-align: right; }
+        .anno-title { font-weight: 700; color: var(--orange); margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .anno-dot { position: absolute; width: 16px; height: 16px; background: transparent; border: 2px solid var(--orange); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 4px rgba(255, 171, 76, 0.2); opacity: 0; animation: pulseFade 2s infinite 0.2s; }
+
+        @keyframes slideUpFade { to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulseFade { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } }
+
+        .layer-toggle { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 13px; color: var(--text2); font-weight: 500; }
+        .layer-toggle:hover { background: rgba(255,255,255,0.08); }
+        .layer-toggle.active { border-color: var(--cyan); color: var(--text); background: rgba(78, 205, 196, 0.05); }
+        .layer-toggle .icon-eye { transition: 0.2s; font-size: 14px; }
+        .layer-toggle:not(.active) .icon-eye { opacity: 0.3; filter: grayscale(100%); }
+
+        @keyframes computationalGrid { 0% { top: -100%; opacity: 0; } 10% { opacity: 0.8; } 90% { opacity: 0.8; } 100% { top: 100%; opacity: 0; } }
+        .saliency-grid { position: absolute; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(69, 232, 157, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(69, 232, 157, 0.3) 1px, transparent 1px); background-size: 25px 25px; border-bottom: 3px solid #45e89d; box-shadow: 0 10px 20px -5px rgba(69, 232, 157, 0.5); animation: computationalGrid 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; pointer-events: none; z-index: 10; }
+
+        .viridis-slider { -webkit-appearance: none; width: 100%; height: 12px; padding: 0; background-image: linear-gradient(90deg, rgb(68, 1, 84) 0%, rgb(59, 82, 139) 25%, rgb(33, 145, 140) 50%, rgb(94, 201, 98) 75%, rgb(253, 231, 37) 100%); background-repeat: no-repeat; background-size: 100% 100%; border-radius: 6px; outline: none; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; margin-top: 6px; }
+        .viridis-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 24px; border-radius: 4px; background: #fff; cursor: pointer; border: 2px solid #111; box-shadow: 0 0 5px rgba(0,0,0,0.8); }
+    
+        /* --- LIGHT THEME OVERRIDES --- */
+        body.light-theme {
+            --bg: #f4f4f9; 
+            --surface: #ffffff; 
+            --surface2: #e4e4ed;
+            --border: #cdd0dc; 
+            --text: #16161d; 
+            --text2: #5a5a72;
+            --canvas-bg: #ffffff; 
+            
+            --cyan: #0d9488; 
+            --orange: #ea580c; 
+            --blue: #4f46e5;
+            --green: #059669; 
+            --pink: #db2777; 
+            --purple: #7c3aed;
+            --gold: #d97706;
+            --red: #dc2626;
+        }
+        body.light-theme .legend-panel,
+        body.light-theme .chart-annotation {
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+   <header style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 24px;">
+            <span>PerVis</span>
+            <div style="display: flex; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--border);">
+                <button class="btn" style="width: auto; padding: 6px 16px; background: transparent; color: var(--text2); font-weight: 500; border: none;" onclick="window.location.href='index.html'">Part A: Tutorial</button>
+                <button class="btn" style="width: auto; padding: 6px 16px; background: var(--cyan); color: var(--bg); font-weight: bold; cursor: default;">Part B: Application</button>
+            </div>
+        </div>
+        <button class="btn" style="width: auto; padding: 6px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border);" onclick="toggleTheme()">🌓 Toggle Theme</button>
+    </header>
+    <div class="viz-col">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 16px; margin: 0;">Visualization Window</h2>
+            <div style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text2); background: var(--surface2); padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                <span>Marker Size: <strong id="markerSizeDisplay" style="color: var(--cyan);">2.0</strong></span>
+                <input type="range" min="0.5" max="5.0" step="0.1" value="2.0" style="width: 100px; margin: 0; accent-color: var(--cyan);" oninput="changeGlobalMarkerSize(this.value)">
+            </div>
+        </div>
+
+        <div class="viz-wrapper">
+            <div id="vizLegend" class="legend-panel hidden"></div>
+            <div id="annotationsLayer" class="annotation-layer"></div>
+            <div class="canvas-container" id="canvasArea">
+                <div style="color: var(--text2); text-align: center; position: relative; z-index: 5;" id="canvasMsg">[ Awaiting Data ]</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--text2);">
+            <strong style="display: block; margin-bottom: 6px;">References:</strong>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; padding-left: 8px; line-height: 1.3;">
+                <div>[1] Park, Y., et al., "Visualization-aware sampling for very large databases", ICDE 2016.</div>
+                <div>[2] Chen, Z., et al., "Variational blue noise sampling", IEEE TVCG, 18(10).</div>
+                <div>[3] Eldar, Y., et al., "The farthest point strategy for progressive image sampling", IEEE TIP, 6(9).</div>
+                <div>[4] Moumoulidou, Zafeiria, et al. "Perception-aware Sampling for Scatterplot Visualizations." arXiv preprint arXiv:2504.20369 (2025).</div>
+            </div>
+        </div>
+    </div>
+
+   <div class="controls-col" id="colControls">
+        <h2 style="margin-bottom: 16px; font-size: 16px;">Application of PAWS</h2>
+        
+        <div class="step-card active" id="step1Card">
+            <div class="step-label" style="color: var(--blue);"><span class="step-num">1</span> Dataset Selection</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Select a dataset to view its complete data pattern</div>
+            
+            <select class="select-styled" id="datasetSelector" onchange="switchDataset(this.value)">
+                <option value="epileptic_corr" selected>Epileptic Seizures (Correlation)</option>
+                <option value="estate_anomalies">Real Estate (Anomalies)</option>
+                <option value="estate_corr">Real Estate (Correlation)</option>
+            </select>
+            
+            <button class="btn btn-blue" id="btnPlotFull" onclick="plotCompleteData()">📊 Plot Complete Data</button>
+            <button class="btn btn-green hidden" id="btnGoStep2" style="margin-top: 12px;" onclick="startSaliencyStep()">➡️ Generate Saliency Map</button>
+        </div>
+
+        <div class="step-card hidden" id="step2Card">
+            <div class="step-label" style="color: var(--green);"><span class="step-num">2</span> Computational Saliency</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Observe the visual attention weights for this dataset computed using saliency map</div>
+            
+            <div id="step2Results" style="display: flex; flex-direction: column; margin-top: 12px;">
+                <div class="layer-toggle step2-toggle active" id="btnToggle2Raw" onclick="toggleStep2Raw()" style="margin-bottom: 12px;">
+                    <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Overlay Original Data</span><span class="icon-eye">👁️</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text2); display: flex; justify-content: space-between; font-weight: bold;">
+                    <span>Background Noise</span><span style="color: var(--gold);">High Attention</span>
+                </div>
+                <input type="range" id="saliencyFilter2" min="0" max="1" step="0.05" value="0.05" oninput="updateSaliencyThreshold2(this.value)" class="viridis-slider">
+            </div>
+            
+            <button class="btn btn-purple" id="btnGoStep3" style="margin-top: 15px;" onclick="startPlaygroundStep()">🕹️ Open Sampler Playground</button>
+        </div>
+
+        <div class="step-card hidden" id="step3Card">
+            <div class="step-label" style="color: var(--purple);"><span class="step-num">3</span> Algorithm Playground</div>
+            <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;">Test PAWS against known sampling techniques</div>
+            
+            <div style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text2);">
+                    <span>Sample Budget:</span><strong id="budgetValueDispB" style="color: var(--text); font-size: 14px;">1898</strong>
+                </div>
+                <input type="range" id="budgetSliderB" min="0" max="6" step="1" value="3" oninput="changeBudgetB(this.value)">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text2);">
+                    <span>250</span><span>375</span><span>844</span><span>1898</span><span>4271</span><span>9611</span><span>All</span>
+                </div>
+            </div>
+            
+           <div style="font-size: 11px; font-weight: bold; color: var(--text2); margin-top: 4px;">SELECT ALGORITHM:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <div class="layer-toggle step3-sampler" onclick="setSamplerB('random', this)"><span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--orange);"></div> Random</span></div>
+                <div class="layer-toggle step3-sampler" onclick="setSamplerB('vas', this)"><span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--purple);"></div> VAS</span></div>
+                <div class="layer-toggle step3-sampler" onclick="setSamplerB('density', this)"><span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--gold);"></div> DBS</span></div>
+                <div class="layer-toggle step3-sampler" onclick="setSamplerB('blue_noise', this)"><span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--pink);"></div> Blue-Noise</span></div>
+                
+                <div class="layer-toggle step3-sampler" onclick="setSamplerB('max_min', this)">
+                    <span style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--cyan);"></div> Max-Min</span>
+                </div>
+
+                <div class="layer-toggle step3-sampler active" style="border-color: var(--red); background: rgba(255, 71, 87, 0.05);" onclick="setSamplerB('paws', this)">
+                    <span style="display:flex; align-items:center; gap:6px; color: var(--text);"><div style="width:10px; height:10px; border-radius:50%; background:var(--red);"></div> PAWS</span>
+                </div>
+            </div>
+            
+            <div class="layer-toggle step3-toggle" id="btnToggle3Raw" onclick="toggleStep3Raw()">
+                <span style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; border-radius:50%; background:var(--blue);"></div> Overlay Original Data</span><span class="icon-eye">❌</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="trisa-col">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--orange); display: grid; place-items: center; font-size: 20px;">👩🏽‍💻</div>
+            <div>
+                <div style="font-weight: 700; color: var(--orange);">Trisa</div>
+                <div style="font-size: 12px; color: var(--text2);">Data Scientist</div>
+            </div>
+        </div>
+        <div id="chatLog" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="chat-bubble">
+                Let's observe how Perception-Aware Sampling (PAWS) performs against other sampling techniques on different datasets. <br><br>
+                Use the controls to switch datasets, observe the saliency weights, and test various sampling algorithms. <br><br>
+                First, let's start by <span class="txt-highlight">selecting a dataset</span> and <span class="txt-highlight">plotting its complete data </span> to understand its inherent visual patterns.<br><br>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. STATE, NARRATIVE & THEME ENGINE
+    // ==========================================
+    // THE BULLETPROOF APP STATE FOR PART B
+    const APP_STATE = {
+        dataset: 'epileptic_corr', 
+        currentStep: 1,
+        markerSize: 2.0, // <-- NEW ADDITION
+        saliencyThreshold: 0.00, // <-- NEW ADDITION
+        step2: { threshold: 0.05, showRaw: true },
+        step3: { budgetIndex: 3, budgets: ["250", "375", "844", "1898", "4271", "9611", "All"], activeSampler: 'paws', showRaw: false }
+    };
+
+ function getThemeColors() {
+        const isLight = document.body.classList.contains('light-theme');
+        return {
+            raw: isLight ? '96, 165, 250' : '107, 138, 253', 
+            random: isLight ? '234, 88, 12' : '255, 171, 76',       
+            vas: isLight ? '126, 34, 206' : '168, 127, 251',        
+            density: isLight ? '180, 83, 9' : '255, 200, 61',      
+            blue_noise: isLight ? '219, 39, 119' : '255, 107, 240', 
+            max_min: isLight ? '13, 148, 136' : '78, 205, 196',  // <-- THE CRITICAL FIX
+            paws: isLight ? '220, 38, 38' : '255, 71, 87',          
+        };
+    }
+
+   const SAMPLER_CHATS = {
+        'random': `<strong>Random Sampling:</strong><br><br>It's <span class="txt-success">very fast</span>, but I <span class="txt-danger">could not make the left smaller cluster visible</span> even with a higher sample size.`,
+        
+        'vas': `<strong>Visualization-Aware Sampling (VAS) [1]:</strong><br><br>
+        VAS takes a <span class="txt-danger">lot of time</span> to compute its sample.<br><br>
+        VAS optimizes for the final rendered plot. Because dense areas suffer from overplotting, it determines that sampling more points from there won't change the visual output. <br><br>Instead, it spends its budget on covering different regions. It captures <span class="txt-concept">cluster shapes</span>, but within smaller budget often fails to preserve <span class="txt-warning">density characteristics</span> and <span class="txt-warning">boundary separation</span>.`,
+
+        'density': `<strong>Density-Biased Sampling (DBS):</strong><br><br>DBS is also <span class="txt-success">very fast</span>. <br><br>I can see that DBS focuses on preserving different <span class="txt-concept">dense regions</span> of the data. However, if there is a significant density imbalance, it is <span class="txt-warning">favoring the denser regions</span> and ignoring the sparser ones.`,
+        
+        'blue_noise': `<strong>Blue-Noise Sampling [2]:</strong><br><br>Blue-noise samples the data points by enforcing a minimum spatial distance among them.
+        <br><br>Rather than being cluttered, this naturally forces the sample to spread out and <span class="txt-success">preserves smaller trends along with larger ones</span>. However, calculating those distance constraints makes it <span class="txt-danger">computationally very expensive</span>.`,
+        
+        // --- NEW MAX-MIN CHAT ---
+        'max_min': `<strong>Max-Min Sampling [3]:</strong><br><br>Max-min searches for empty space to cover the plot by always selecting the point that is globally <span class="txt-concept">furthest away</span> from the already sampled points.<br><br>While this encourages spatial coverage, it treats noise and massive cores equally, which <span class="txt-danger">harms the relative density</span> of the clusters, making them inseparable for smaller budgets.`
+    
+    };
+
+    const TOUR_STEPS = {
+        1: { 
+            chat: `Welcome to the <strong>PAWS Application Environment!</strong><br><br>Now that we understand the math behind Perception-Aware Sampling, let's stress-test it.<br><br>Use the dropdown to select a different dataset, and click <strong>Plot Complete Data</strong> to see its raw distribution and complexity.`, 
+            action: function() { 
+                document.getElementById('canvasMsg').innerHTML = '[ Select Dataset & Plot ]'; 
+                initCanvas(); 
+            } 
+        },
+        2: { 
+            chat: `Here is the <span class="txt-concept">computed saliency map</span> for this dataset. <br><br>Notice how saliency maps can identify the core trends and isolated clusters regardless of the dataset's overall shape. <br><br>Let's play with the threshold slider to isolate the most visually critical regions before moving to step 3 by opening the <span class="txt-highlight">sampler playground</span> to experiment with different samplers!`, 
+            action: function() { renderPartBSaliency(); } 
+        },
+        3: { 
+            chat: `<strong>The Playground!</strong><br><br>Toggle between Random, VAS, DBS, Blue-Noise, Max-Min and <strong class="txt-danger">PAWS</strong>.<br><br>Observe how PAWS elegantly balances preserving the high-saliency structures from the previous step with global spatial coverage, even at strict budgets!`, 
+            action: function() { renderPartBPlayground(); } 
+        }
+    };
+    
+    // ==========================================
+    // 2. CORE CONTROLLER
+    // ==========================================
+    function changeGlobalMarkerSize(val) {
+        APP_STATE.markerSize = parseFloat(val);
+        document.getElementById('markerSizeDisplay').innerText = APP_STATE.markerSize.toFixed(1);
+        redrawCurrentCanvas();
+    }
+
+    function executeStep(stepNum) {
+        // --- THE KILL SWITCH ---
+        if (APP_STATE.currentStep === 9 && stepNum !== 9) {
+            APP_STATE.step9.animating = false;
+            const btn = document.getElementById('btnPlayPaws');
+            if (btn) { btn.innerHTML = "▶️ Play Selection Animation"; btn.disabled = false; }
+        }
+
+        APP_STATE.currentStep = stepNum;
+        document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+        document.getElementById(`step${stepNum}Card`).classList.add('active');
+        if(TOUR_STEPS[stepNum]) TOUR_STEPS[stepNum].action();
+    }
+    
+    function updateChat(htmlContent) {
+        document.getElementById('chatLog').innerHTML = `<div class="chat-bubble">${htmlContent}</div>`;
+    }
+
+    function revealNextStepCard(nextStepNum) {
+        const nextCard = document.getElementById(`step${nextStepNum}Card`);
+        if (nextCard) { nextCard.classList.remove('hidden'); setTimeout(() => nextCard.style.opacity = '1', 50); }
+    }
+
+    function updateLegend(items) {
+        const legend = document.getElementById('vizLegend');
+        if (!items || items.length === 0) { legend.classList.add('hidden'); return; }
+        legend.innerHTML = items.map(item => `<div class="legend-item"><div class="legend-dot" style="background: ${item.color};"></div><div>${item.label}</div></div>`).join('');
+        legend.classList.remove('hidden');
+    }
+
+    function initCanvas() {
+        const container = document.getElementById('canvasArea');
+        document.querySelectorAll('canvas').forEach(c => c.remove()); 
+        document.getElementById('annotationsLayer').innerHTML = '';
+        
+        const canvas = document.createElement('canvas'); container.appendChild(canvas);
+        const width = container.clientWidth, height = container.clientHeight;
+        canvas.width = width * window.devicePixelRatio; canvas.height = height * window.devicePixelRatio;
+        
+        const ctx = canvas.getContext('2d'); ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        const pad = 40, plotW = width - pad * 2, plotH = height - pad * 2;
+
+        const style = getComputedStyle(document.body);
+        const borderColor = style.getPropertyValue('--border').trim() || '#2a2a3a';
+        const textColor = style.getPropertyValue('--text2').trim() || '#8888a0';
+
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(pad, pad - 20); ctx.lineTo(pad, height - pad); ctx.lineTo(width - pad + 20, height - pad); ctx.stroke();
+
+        ctx.fillStyle = textColor; ctx.font = '600 13px Inter';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText('0', pad - 8, height - pad + 8);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('X', width - pad + 28, height - pad);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('Y', pad, pad - 28);
+
+        return { ctx, pad, plotW, plotH, height, width }; 
+    }
+
+    function toggleTheme() {
+        document.body.classList.toggle('light-theme');
+        redrawCurrentCanvas();
+    }
+
+    // ==========================================
+    // UTILITY: NON-LINEAR STATE ROUTING
+    // ==========================================
+    
+   
+    // --- NON-LINEAR NAVIGATION FOR PART B ---
+    function redrawCurrentCanvas() {
+        const step = APP_STATE.currentStep;
+        if (step === 1 && document.getElementById('btnPlotFull').style.display === 'none') {
+            // Only redraw if they actually plotted it
+            plotCompleteData(); 
+        }
+        else if (step === 2) renderPartBSaliency();
+        else if (step === 3) renderPartBPlayground();
+    }
+
+    function renderStep9Static() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+        
+        let legendItems = [];
+        
+        // 1. Conditionally draw the original data
+        if (APP_STATE.step9.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.15)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data (Faded)", color: `rgba(${colors.raw}, 0.15)` });
+        }
+        
+        // THE FIX: Always push the PAWS label into the legend, no matter what!
+        legendItems.push({ label: "PAWS Selection", color: `rgba(${colors.paws}, 0.9)` });
+        
+        // 2. Restore the animation progress if the user toggles mid-animation
+        if (APP_STATE.step9.orderedPoints && APP_STATE.step9.currentIndex > 0) {
+            ctx.fillStyle = `rgba(${colors.paws}, 0.9)`;
+            for (let j = 0; j < APP_STATE.step9.currentIndex; j++) {
+                let pt = APP_STATE.step9.orderedPoints[j];
+                ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        
+        updateLegend(legendItems);
+        if (APP_STATE.step9.currentIndex === 0) {
+            document.getElementById('annotationsLayer').innerHTML = '';
+        }
+    }
+    
+    function animatePawsDrawing(orderedPoints, btn) {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        APP_STATE.step9.orderedPoints = orderedPoints;
+        APP_STATE.step9.currentIndex = 0;
+        APP_STATE.step9.isPaused = false;
+        
+        renderStep9Static();
+
+        const layer = document.getElementById('annotationsLayer');
+        let i = 0; 
+        let hasTriggeredPause = false;
+
+        // Make the Resume button global for the resume function to find
+        window.resumePaws = function() {
+            APP_STATE.step9.isPaused = false;
+            document.getElementById('btnResumePaws').style.display = 'none';
+            layer.innerHTML = '';
+            drawNextFrame();
+        };
+
+        function drawNextFrame() {
+            if (!APP_STATE.step9.animating || APP_STATE.currentStep !== 9 || APP_STATE.step9.isPaused) return;
+
+            const container = document.getElementById('canvasArea');
+            const activeCtx = container.querySelector('canvas').getContext('2d');
+            activeCtx.fillStyle = `rgba(${colors.paws}, 0.9)`;
+
+            // THE PAUSE LOGIC:
+            if (i >= Math.floor(orderedPoints.length / 2) && !hasTriggeredPause) {
+                hasTriggeredPause = true;
+                
+                // 1. Temporarily change the main button text to signal a pause is happening
+                btn.innerHTML = "⌛ Analyzing Selection...";
+                
+                // 2. Add a slight delay (e.g., 800ms) before showing the observation
+                setTimeout(() => {
+                    if (APP_STATE.currentStep !== 9) return; // Safety check
+
+                    APP_STATE.step9.isPaused = true;
+                    
+                    // Show the Resume button
+                    document.getElementById('btnResumePaws').style.display = 'flex';
+                    btn.innerHTML = "⏸️ Paused for Observation";
+                    
+                    const cx = 40 + (0.5 * (container.clientWidth - 50)); 
+                    const cy = 40 + (0.01 * (container.clientHeight - 50));
+                    
+                    layer.innerHTML = `
+                        <div class="chart-annotation" style="left: ${cx - 130}px; top: ${cy}px; border-left-color: var(--cyan); border-right-color: var(--cyan); border-left-width: 3px; border-right-width: 3px; width: 260px; text-align: center;">
+                            <div class="anno-title" style="color: var(--cyan);">Observation</div>
+                            PAWS balances picking points in <strong>all salient regions</strong> while maintaining <strong>global spatial coverage</strong>. Resume the animation to see how it continues!
+                        </div>
+                    `;
+                }, 800); // <--- Adjust this number (ms) to change the delay duration
+                
+                return; // Stop the loop execution immediately
+            }
+
+            if (i >= orderedPoints.length) {
+                APP_STATE.step9.animating = false; 
+                btn.innerHTML = "🔄 Replay Animation"; btn.disabled = false; 
+                document.getElementById('btnGoStep10').classList.remove('hidden');
+                return;
+            }
+            
+            // Standard batching logic...
+            let batchSize = (i < 200) ? 2 : 20; 
+            let limit = Math.min(i + batchSize, orderedPoints.length);
+            for (; i < limit; i++) {
+                let pt = orderedPoints[i];
+                activeCtx.beginPath(); activeCtx.arc(40 + (pt.x * (container.clientWidth - 80)), (container.clientHeight - 40) - (pt.y * (container.clientHeight - 80)), APP_STATE.markerSize, 0, Math.PI * 2); activeCtx.fill();
+            }
+
+            APP_STATE.step9.currentIndex = i;
+            btn.innerHTML = `▶️ Animating PAWS... (${i} / ${orderedPoints.length})`;
+            requestAnimationFrame(drawNextFrame);
+        }
+        
+        
+        
+        drawNextFrame();
+    }
+
+    // This is the function called by the button click
+    function resumePawsAnimation() {
+        if (window.resumePaws) window.resumePaws();
+    }
+    
+    function navigateToStep(stepNum) {
+        const card = document.getElementById(`step${stepNum}Card`);
+        if (!card || card.classList.contains('hidden') || APP_STATE.currentStep === stepNum) return;
+
+        APP_STATE.currentStep = stepNum;
+        
+        document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+
+        if (TOUR_STEPS[stepNum] && TOUR_STEPS[stepNum].chat) {
+            updateChat(TOUR_STEPS[stepNum].chat);
+        }
+        redrawCurrentCanvas();
+    }
+
+    function enableNonLinearNavigation() {
+        document.querySelectorAll('.step-card').forEach(card => {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', function(e) {
+                if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.closest('.layer-toggle')) return;
+                const stepId = this.id.replace('step', '').replace('Card', '');
+                const stepNum = isNaN(stepId) ? stepId : parseInt(stepId);
+                navigateToStep(stepNum);
+            });
+        });
+    }
+
+    function updateBudgetDisplay() {
+        const ds = APP_STATE.dataset;
+        // Dynamically find the total length of the raw data (fallback to "???" if still loading)
+        const totalPoints = precomputedData?.[ds]?.["raw"]?.length || "???"; 
+        const rawVal = APP_STATE.step3.budgets[APP_STATE.step3.budgetIndex];
+        
+        // Format the string elegantly 
+        const displayString = rawVal === "All" ? `${totalPoints} / ${totalPoints}` : `${rawVal} / ${totalPoints}`;
+        
+        const dispEl = document.getElementById('budgetValueDispB');
+        if (dispEl) dispEl.innerText = displayString;
+    }
+    
+    // ==========================================
+    // 3. CANVAS RENDERERS (STEPS 1 TO 5)
+    // ==========================================
+    function runRandomSample() {
+        APP_STATE.step1.sampled = true;
+        
+        document.getElementById('btnStep1').style.display = 'none';
+        document.getElementById('step1Toggles').style.display = 'flex';
+        
+        // 1. Define the updated, post-sampling narrative
+        const postSampleChat = `Wow, that was <span class="txt-success">fast!</span><br><br>I see <strong><span class="txt-gold">3 obvious clusters</span></strong>, probably corresponding to 3 different course sections, and spread outliers that I can probably ignore for the moment.<br><br>I will dive into these particular clusters to better understand their differences and impact of other factors, and build my report.<br><br>Let's move to <strong>Step 2</strong> to apply this workflow to the complete data!`;
+        
+        // 2. Update the chat on the screen right now
+        updateChat(postSampleChat);
+        
+        // 3. THE FIX: Permanently overwrite the dictionary so Trisa remembers this if you navigate back!
+        TOUR_STEPS[1].chat = postSampleChat;
+        
+        renderStep1Canvas();
+        
+        // Directly reveal the next step card
+        revealNextStepCard(3);
+        
+        // Gently scroll the control panel down
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+    
+    function toggleStep1Circles() {
+        APP_STATE.step1.circles = !APP_STATE.step1.circles;
+        const el = document.getElementById('btnToggle1Circles');
+        if (APP_STATE.step1.circles) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+        else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        renderStep1Canvas();
+    }
+
+    function renderStep1Canvas() {
+        const ds = APP_STATE.dataset; const k = APP_STATE.sampleSize; const colors = getThemeColors();
+        let sampleData = precomputedData?.[ds]?.[k]?.["random"] || Array.from({length: 1500}, () => ({x: 0.2 + Math.random()*0.6, y: 0.3 + Math.random()*0.4}));
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        ctx.fillStyle = `rgba(${colors.random}, 0.85)`;
+        sampleData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Random Sample", color: `rgba(${colors.random}, 0.9)` }]);
+
+        const layer = document.getElementById('annotationsLayer'); 
+        if (APP_STATE.step1.circles) {
+            const container = document.getElementById('canvasArea');
+            const c1_x = pad + (0.38 * plotW); const c1_y = (container.clientHeight - pad) - (0.45 * plotH);
+            const c2_x = pad + (0.55 * plotW); const c2_y = (container.clientHeight - pad) - (0.67 * plotH);
+            const c3_x = pad + (0.65 * plotW); const c3_y = (container.clientHeight - pad) - (0.6 * plotH);
+
+            layer.innerHTML = `
+                <div style="position: absolute; border: 2px dashed var(--orange); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${c1_x}px; top: ${c1_y}px; background: rgba(${colors.random}, 0.05);"></div>
+                <div style="position: absolute; border: 2px dashed var(--orange); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${c2_x}px; top: ${c2_y}px; background: rgba(${colors.random}, 0.05);"></div>
+                <div style="position: absolute; border: 2px dashed var(--orange); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c3_x}px; top: ${c3_y}px; background: rgba(${colors.random}, 0.05);"></div>
+            `;
+        } else {
+            layer.innerHTML = '';
+        }
+    }
+   
+    function showFullPlot() {
+        // 1. Hide the button and reveal the toggles immediately
+        document.getElementById('btnStep3').style.display = 'none'; 
+        document.getElementById('step3Toggles').style.display = 'flex';
+        APP_STATE.step3.circles = true;
+        
+        const toggleBtn = document.getElementById('btnToggle3Circles');
+        if (toggleBtn) { toggleBtn.classList.add('active'); toggleBtn.querySelector('.icon-eye').innerText = '👁️'; }
+        
+        // 2. Instantly update Trisa's chat
+        updateChat(TOUR_STEPS[3].chat);
+        
+        // 3. Instantly draw the complete dataset
+        renderStep3Canvas(); 
+        
+        // 4. Reveal the Autopsy step
+        revealNextStepCard(4);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+
+    function toggleStep3Circles() {
+        APP_STATE.step3.circles = !APP_STATE.step3.circles;
+        const el = document.getElementById('btnToggle3Circles');
+        if (APP_STATE.step3.circles) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+        else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        renderStep3Canvas();
+    }
+
+    function renderStep3Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        ctx.fillStyle = `rgba(${colors.raw}, 0.5)`;
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` }]);
+
+        const layer = document.getElementById('annotationsLayer');
+        if (APP_STATE.step3.circles) {
+            const container = document.getElementById('canvasArea');
+            const c1_x = pad + (0.38 * plotW); const c1_y = (container.clientHeight - pad) - (0.45 * plotH);
+            const c2_x = pad + (0.55 * plotW); const c2_y = (container.clientHeight - pad) - (0.67 * plotH);
+            const c3_x = pad + (0.65 * plotW); const c3_y = (container.clientHeight - pad) - (0.6 * plotH);
+            const c4_x = pad + (0.15 * plotW); const c4_y = (container.clientHeight - pad) - (0.52 * plotH);
+            const c5_x = pad + (0.82 * plotW); const c5_y = (container.clientHeight - pad) - (0.42 * plotH);
+
+            layer.innerHTML = `
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c1_x}px; top: ${c1_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${c2_x}px; top: ${c2_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--blue); border-radius: 50%; transform: translate(-50%, -50%); width: 150px; height: 150px; left: ${c3_x}px; top: ${c3_y}px; background: rgba(${colors.raw}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--pink); border-radius: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; left: ${c4_x}px; top: ${c4_y}px; background: rgba(${colors.blue_noise}, 0.08);"></div>
+                <div style="position: absolute; border: 2px dashed var(--pink); border-radius: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; left: ${c5_x}px; top: ${c5_y}px; background: rgba(${colors.blue_noise}, 0.08);"></div>
+            `;
+        } else {
+            layer.innerHTML = '';
+        }
+    }
+
+    function toggleLayer(layerName, targetStep) {
+        APP_STATE.layers[layerName] = !APP_STATE.layers[layerName];
+        document.querySelectorAll(`.toggle-${layerName}`).forEach(el => {
+            if (APP_STATE.layers[layerName]) { el.classList.add('active'); el.querySelector('.icon-eye').innerText = '👁️'; } 
+            else { el.classList.remove('active'); el.querySelector('.icon-eye').innerText = '❌'; }
+        });
+        if (APP_STATE.currentStep !== targetStep) { executeStep(targetStep); } 
+        else { if (APP_STATE.currentStep === 4) renderStep4(); }
+    }
+
+    function startAutopsy() {
+        const btn = document.getElementById('btnStep4'); btn.innerHTML = "🔄 Reset Autopsy";
+        document.getElementById('step4Toggles').style.display = 'flex'; executeStep(4);
+    }
+
+    function renderStep4() {
+        const ds = APP_STATE.dataset; const k = APP_STATE.sampleSize; const colors = getThemeColors();
+        let sampleData = precomputedData?.[ds]?.[k]?.["random"] || [];
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+
+        if (APP_STATE.layers.raw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` });
+        }
+        if (APP_STATE.layers.sample) {
+            ctx.fillStyle = `rgba(${colors.random}, 0.85)`; 
+            sampleData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Random Sample", color: `rgba(${colors.random}, 0.9)` });
+        }
+        updateLegend(legendItems); updateChat(TOUR_STEPS[4].chat);
+
+        const layer = document.getElementById('annotationsLayer'); const container = document.getElementById('canvasArea');
+        
+        // Your improved, obstruction-free coordinates!
+        const cx1 = pad + (0.12 * plotW); const cy1 = (container.clientHeight - pad) - (0.95 * plotH);
+        const cx2 = pad + (0.90 * plotW); const cy2 = (container.clientHeight - pad) - (0.15 * plotH);
+
+        if(APP_STATE.layers.annotations) {
+            layer.innerHTML = `
+                <div class="chart-annotation" style="border-left-color: var(--orange); left: ${cx1}px; top: ${cy1}px;">
+                    <div class="anno-title">Lost cluster-I</div>Random sample missed this smaller left cluster.
+                </div>
+                <div class="chart-annotation right-align" style="border-right-color: var(--orange); left: ${cx2 - 260}px; top: ${cy2 - 60}px;">
+                    <div class="anno-title">Lost cluster-II</div>It did not sample enough points to preserve this cluster.
+                </div>
+            `;
+        } else {
+            layer.innerHTML = '';
+        }
+    }
+
+    
+    function startStep5() {
+        executeStep(5); 
+        revealNextStepCard(5);
+        updateChat(TOUR_STEPS[5].chat); 
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+   function changeBudget5(sliderValue) {
+        APP_STATE.step5.budgetIndex = parseInt(sliderValue);
+        let rawVal = APP_STATE.step5.budgets[APP_STATE.step5.budgetIndex];
+        let displayRatio = rawVal.includes("All") ? "10150 / 10150" : `${rawVal} / 10150`;
+        document.getElementById('budgetValueDisp').innerText = displayRatio;
+        
+        if (APP_STATE.currentStep !== 5) {
+            executeStep(5);
+            updateChat(TOUR_STEPS[5].chat);
+        }
+
+        // Instantly render without any artificial delay checks!
+        renderStep5();
+    }
+    
+    function toggleStep5Raw() {
+        APP_STATE.step5.showRaw = !APP_STATE.step5.showRaw; const el = document.getElementById('btnToggle5Raw');
+        el.classList.toggle('active', APP_STATE.step5.showRaw); el.querySelector('.icon-eye').innerText = APP_STATE.step5.showRaw ? '👁️' : '❌';
+        renderStep5();
+    }
+
+    function toggleStep5Comments() {
+        APP_STATE.step5.showComments = !APP_STATE.step5.showComments; const el = document.getElementById('btnToggle5Comments');
+        el.classList.toggle('active', APP_STATE.step5.showComments); el.querySelector('.icon-eye').innerText = APP_STATE.step5.showComments ? '👁️' : '❌';
+        renderStep5();
+    }
+
+    function setSampler5(samplerId) {
+        APP_STATE.step5.activeSampler = samplerId;
+        
+        if (!APP_STATE.step5.visitedSamplers.includes(samplerId)) {
+            APP_STATE.step5.visitedSamplers.push(samplerId);
+        }
+
+        document.querySelectorAll('.step5-sampler').forEach(el => el.classList.remove('active'));
+        
+        const configMap = { 'random': 'btnSamRandom', 'vas': 'btnSamVas', 'density': 'btnSamDensity', 'blue_noise': 'btnSamBlueNoise', 'max_min': 'btnSamMaxMin' };
+        document.getElementById(configMap[samplerId]).classList.add('active');
+        
+        let chatText = `Alright, here is the Sampler Playground!<br><br>Let's try switching between the algorithms and adjusting the slider. I want to <span class="txt-highlight">capture the three core trends and two smaller ones</span>.<br><br>` + SAMPLER_CHATS[samplerId];
+        
+        // THE FIX: Add the check for !APP_STATE.step5.proceedClicked
+        if (APP_STATE.step5.visitedSamplers.length === 5 && !APP_STATE.step5.proceedClicked) {
+            const btnNext = document.getElementById('btnGoStep6');
+            btnNext.style.display = 'flex'; // Reveals the button
+            
+            chatText += `<br><br><div style="border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 8px;"><strong><span class="txt-success">All algorithms explored!</span></strong><br>I need to pinpoint which regions of the plot truly matters to my eyes.
+                Let's <strong>click the Proceed button below</strong> to visually observe those regions.</div>`;
+            
+            setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+        }
+
+        updateChat(chatText);
+        
+        if (APP_STATE.currentStep !== 5) executeStep(5);
+
+        renderStep5();
+    }
+    
+    function transitionToStep6() {
+        // THE FIX: Permanently lock the button from returning
+        APP_STATE.step5.proceedClicked = true;
+        
+        document.getElementById('btnGoStep6').style.display = 'none';
+        
+        revealNextStepCard(6);
+        executeStep(6);
+        updateChat(TOUR_STEPS[6].chat);
+        
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+    
+    function renderStep5() {
+        const ds = APP_STATE.dataset; const currentBudget = APP_STATE.step5.budgets[APP_STATE.step5.budgetIndex]; 
+        const activeSamp = APP_STATE.step5.activeSampler; const colors = getThemeColors();
+        
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+
+        // Define rawData up here at the top so the whole function can access it safely
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        if (APP_STATE.step5.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`;
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` });
+        }
+
+       const colorMap = { 
+            'random': { rgb: colors.random, label: 'Random Sample' }, 
+            'vas': { rgb: colors.vas, label: 'VAS Sample' }, 
+            'density': { rgb: colors.density, label: 'DBS Sample' }, 
+            'blue_noise': { rgb: colors.blue_noise, label: 'Blue-Noise Sample' },
+            'max_min': { rgb: colors.max_min, label: 'Max-Min Sample' }, // <-- THE FIX: Added Max-min here!
+            'paws': { rgb: colors.paws, label: 'PAWS Selection' }
+        };
+
+        // Smart Data Routing (handles "All (10150)")
+        let sData;
+        if (currentBudget.includes("All")) {
+            sData = rawData.length > 0 ? rawData : Array.from({length: 10150}, () => ({x: Math.random(), y: Math.random()}));
+        } else {
+            sData = precomputedData?.[ds]?.[currentBudget]?.[activeSamp] || Array.from({length: parseInt(currentBudget)}, () => ({x: Math.random(), y: Math.random()}));
+        }
+
+        ctx.fillStyle = `rgba(${colorMap[activeSamp].rgb}, 0.85)`;
+        sData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        legendItems.push({ label: colorMap[activeSamp].label, color: `rgba(${colorMap[activeSamp].rgb}, 0.9)` });
+        updateLegend(legendItems);
+
+        const layer = document.getElementById('annotationsLayer');
+        if (APP_STATE.step5.showComments) {
+            const container = document.getElementById('canvasArea');
+            const cColor = `var(--${colorMap[activeSamp].cssVar})`;
+            
+            // Your improved, obstruction-free coordinates!
+            const cx1 = pad + (0.10 * plotW); const cy1 = (container.clientHeight - pad) - (0.99 * plotH);
+            const cx2 = pad + (0.90 * plotW); const cy2 = (container.clientHeight - pad) - (0.15 * plotH);
+
+            let msg1 = "", msg2 = "";
+            if(activeSamp === 'random') { 
+                msg1 = "Left smaller cluster gets always ignored."; 
+                msg2 = "Right smaller cluster becomes visible with larger budget."; }
+            else if(activeSamp === 'vas') { 
+                msg1 = "VAS samples points covering the three core trends along with different regions maintaining the overall spread."; 
+                msg2 = "But, it fails to preserve the density patterns of the trends within smaller budgets, often obscuring boundaries among different shapes."; }
+            else if(activeSamp === 'density') { 
+                msg1 = "The core trends are preserved within smaller budget."; 
+                msg2 = "To make visible the smaller trends, a larger budget is needed."; }
+            else if(activeSamp === 'blue_noise') { 
+                msg2 = "The core three trends and right smaller cluster become visible within quite smaller budget."; 
+                msg1 = "The left smaller cluster faces challenge. It becomes better visible with larger budget. "; 
+            }
+            else if(activeSamp === 'max_min') { 
+                msg1 = "Similar to VAS, it can capture the trends and overall spread pattern of the data."; 
+                msg2 = "But, similarly, within smaller budgets, relative densities of the trends and boundaries among different shapes are not preserved well."; 
+            }
+
+            // Cleaned HTML: Removed the pulsing dots and set positions cleanly to cx/cy
+            layer.innerHTML = `
+                <div class="chart-annotation" style="border-left-color: ${cColor}; left: ${cx1}px; top: ${cy1}px;">
+                    <div class="anno-title" style="color: ${cColor};">Observation</div>${msg1}
+                </div>
+                <div class="chart-annotation right-align" style="border-right-color: ${cColor}; left: ${cx2 - 260}px; top: ${cy2 - 60}px;">
+                    <div class="anno-title" style="color: ${cColor};">Observation</div>${msg2}
+                </div>
+            `;
+        } else {
+            layer.innerHTML = '';
+        }
+    }
+    
+    
+    
+    // ==========================================
+    // 4. CANVAS RENDERERS (STEPS 6 TO 10)
+    // ==========================================
+
+    function toggleStep6Gazes() {
+        APP_STATE.step6.gazes = !APP_STATE.step6.gazes; const el = document.querySelector('.step6-gazes');
+        el.classList.toggle('active', APP_STATE.step6.gazes); el.querySelector('.icon-eye').innerText = APP_STATE.step6.gazes ? '👁️' : '❌';
+        renderStep6Canvas();
+    }
+
+    function toggleStep6Comments() {
+        APP_STATE.step6.comments = !APP_STATE.step6.comments; const el = document.querySelector('.step6-comments');
+        el.classList.toggle('active', APP_STATE.step6.comments); el.querySelector('.icon-eye').innerText = APP_STATE.step6.comments ? '👁️' : '❌';
+        renderStep6Canvas();
+    }
+
+    function renderStep6Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        updateLegend([{ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` }]);
+
+        const layer = document.getElementById('annotationsLayer'); const container = document.getElementById('canvasArea');
+        const cx1 = pad + (0.35 * plotW); const cy1 = (container.clientHeight - pad) - (0.15 * plotH);
+        const cx2 = pad + (0.01 * plotW); const cy2 = (container.clientHeight - pad) - (0.85 * plotH);
+        const cx3 = pad + (0.99 * plotW); const cy3 = (container.clientHeight - pad) - (0.80 * plotH);
+
+        let html = '';
+        if (APP_STATE.step6.gazes) {
+            html += `
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${pad + (0.38 * plotW)}px; top: ${(container.clientHeight - pad) - (0.45 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 120px; height: 120px; left: ${pad + (0.55 * plotW)}px; top: ${(container.clientHeight - pad) - (0.7 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; left: ${pad + (0.65 * plotW)}px; top: ${(container.clientHeight - pad) - (0.6 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${pad + (0.15 * plotW)}px; top: ${(container.clientHeight - pad) - (0.52 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+                <div style="position: absolute; border: 2px dashed var(--gold); border-radius: 50%; transform: translate(-50%, -50%); width: 130px; height: 130px; left: ${pad + (0.82 * plotW)}px; top: ${(container.clientHeight - pad) - (0.42 * plotH)}px; background: rgba(255, 200, 61, 0.1);"></div>
+            `;
+        }
+        if (APP_STATE.step6.comments) {
+            html += `
+                <div class="chart-annotation" style="left: ${cx1 + 40}px; top: ${cy1 - 40}px; border-left-color: var(--gold); width: 220px;">
+                    <div class="anno-title" style="color: var(--gold);">i) The Core Region</div>The eye immediately targets the three major trends in the center.
+                </div>
+                <div class="chart-annotation" style="left: ${cx2 + 40}px; top: ${cy2 - 20}px; border-left-color: var(--gold); width: 210px;">
+                    <div class="anno-title" style="color: var(--gold);">ii) Left Cluster</div>The eye naturally detects this separate dense group.
+                </div>
+                <div class="chart-annotation right-align" style="left: ${cx3 - 180}px; top: ${cy3 - 20}px; border-right-color: var(--gold); width: 210px;">
+                    <div class="anno-title" style="color: var(--gold);">iii) Right Cluster</div>The eye is drawn across the plot to this distinct region.
+                </div>
+            `;
+        }
+        layer.innerHTML = html;
+    }
+
+    function transitionToStep7() {
+        document.getElementById('btnGoStep7').style.display = 'none';
+        revealNextStepCard(7); executeStep(7); updateChat(TOUR_STEPS[7].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+    function getViridisColor(t) {
+        t = Math.max(0, Math.min(1, t));
+        const stops = [{ t: 0.00, r: 68, g: 1, b: 84 }, { t: 0.25, r: 59, g: 82, b: 139 }, { t: 0.50, r: 33, g: 145, b: 140 }, { t: 0.75, r: 94, g: 201, b: 98 }, { t: 1.00, r: 253, g: 231, b: 37 }];
+        let i = 0; while (i < stops.length - 2 && t >= stops[i+1].t) { i++; }
+        let s1 = stops[i], s2 = stops[i+1]; let percent = (t - s1.t) / (s2.t - s1.t);
+        return { r: Math.floor(s1.r + percent * (s2.r - s1.r)), g: Math.floor(s1.g + percent * (s2.g - s1.g)), b: Math.floor(s1.b + percent * (s2.b - s1.b)) };
+    }
+
+    function updateSaliencyThreshold(val) {
+        APP_STATE.step7.threshold = parseFloat(val);
+        document.getElementById('salThresholdDisp').innerText = val;
+        
+        if (APP_STATE.currentStep === 8) { renderStep8Canvas(); } 
+        else {
+            if (APP_STATE.currentStep !== 7) { executeStep(7); updateChat(TOUR_STEPS[7].chat); }
+            renderStep7Canvas();
+        }
+    }
+
+    function renderStep7Canvas() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        let rawData = precomputedData?.[ds]?.["raw"] || Array.from({length: 8000}, () => ({x: Math.random(), y: Math.random()}));
+        const baseOpacity = APP_STATE.step7.computed ? 0.15 : 0.5; 
+        ctx.fillStyle = `rgba(${colors.raw}, ${baseOpacity})`; 
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+
+        let legendItems = [{ label: APP_STATE.step7.computed ? "Original Data (Faded)" : "Original Data", color: `rgba(${colors.raw}, ${baseOpacity})` }];
+        const layer = document.getElementById('annotationsLayer');
+
+        if (APP_STATE.step7.computed) {
+            layer.innerHTML = ''; 
+            const threshold = APP_STATE.step7.threshold;
+            rawData.forEach(pt => {
+                const score = pt.saliency !== undefined ? pt.saliency : Math.max(0, 1 - (Math.hypot(pt.x-0.35, pt.y-0.75)*2));
+                if (score >= threshold) { 
+                    const color = getViridisColor(score);
+                    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+                    ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill();
+                }
+            });
+            legendItems.push({ label: "High Visual Saliency", color: "var(--gold)" });
+        } else { layer.innerHTML = ''; }
+        updateLegend(legendItems);
+    }
+
+    function startStep9() {
+        document.getElementById('btnGoStep9').style.display = 'none';
+        revealNextStepCard(9); executeStep(9); updateChat(TOUR_STEPS[9].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+   function runPawsAnimation() {
+        const btn = document.getElementById('btnPlayPaws');
+        document.getElementById('btnResumePaws').style.display = 'none'; // Hide if replaying
+        btn.innerHTML = "⏳ Computing Selection Order..."; btn.disabled = true; 
+        document.getElementById('annotationsLayer').innerHTML = ''; 
+        
+        APP_STATE.step9.animating = false;
+
+        if (APP_STATE.currentStep !== 9) { 
+            executeStep(9); 
+            updateChat(TOUR_STEPS[9].chat); 
+        }
+
+        const ds = APP_STATE.dataset;
+        let pawsData = precomputedData?.[ds]?.["1500"]?.["paws"] || Array.from({length: 1500}, () => ({x: Math.random(), y: Math.random(), perception: Math.random()}));
+
+        setTimeout(() => {
+            if (APP_STATE.currentStep !== 9) return;
+
+            let startIdx = 0; let orderedPoints = [pawsData[startIdx]]; 
+            let unselected = [...pawsData]; unselected.splice(startIdx, 1); 
+            
+            let minDistances = new Array(unselected.length).fill(Infinity);
+            for (let i = 0; i < unselected.length; i++) { minDistances[i] = Math.hypot(unselected[i].x - orderedPoints[0].x, unselected[i].y - orderedPoints[0].y); }
+            
+            while(unselected.length > 0) {
+                let bestIdx = -1; let maxScore = -Infinity;
+                for(let i=0; i<unselected.length; i++) {
+                    let w_y = unselected[i].perception || unselected[i].saliency || 0.5;
+                    let score = w_y * minDistances[i]; 
+                    if(score > maxScore) { maxScore = score; bestIdx = i; }
+                }
+                
+                let nextPt = unselected[bestIdx]; orderedPoints.push(nextPt);
+                unselected.splice(bestIdx, 1); minDistances.splice(bestIdx, 1);
+                
+                for(let i=0; i<unselected.length; i++) {
+                    let d = Math.hypot(unselected[i].x - nextPt.x, unselected[i].y - nextPt.y);
+                    if(d < minDistances[i]) minDistances[i] = d;
+                }
+            }
+            
+            btn.innerHTML = "▶️ Animating PAWS..."; 
+            APP_STATE.step9.animating = true; 
+            animatePawsDrawing(orderedPoints, btn);
+        }, 50); 
+    }
+    
+    
+    function startStep10() {
+        document.getElementById('btnGoStep10').style.display = 'none';
+        revealNextStepCard(10); executeStep(10); updateChat(TOUR_STEPS[10].chat); renderStep10Canvas();
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: 9999, behavior: 'smooth' }); }, 100);
+    }
+
+  function changePawsBudget(val) {
+        APP_STATE.step10.budgetIndex = parseInt(val);
+        let rawVal = APP_STATE.step10.budgets[APP_STATE.step10.budgetIndex];
+        let displayRatio = rawVal.includes("All") ? "10150 / 10150" : `${rawVal} / 10150`;
+        document.getElementById('pawsBudgetValue').innerText = displayRatio;
+        
+        if (APP_STATE.currentStep != 10) {
+            executeStep(10);
+            updateChat(TOUR_STEPS[10].chat);
+        }
+        renderStep10Canvas();
+    }
+
+    function toggleStep10Layer(layer) {
+        APP_STATE.step10.layers[layer] = !APP_STATE.step10.layers[layer]; const el = document.querySelector(`.step10-${layer}`);
+        el.classList.toggle('active', APP_STATE.step10.layers[layer]); el.querySelector('.icon-eye').innerText = APP_STATE.step10.layers[layer] ? '👁️' : '❌';
+        renderStep10Canvas();
+    }
+
+    function renderStep10Canvas() {
+        const ds = APP_STATE.dataset; const currentBudget = APP_STATE.step10.budgets[APP_STATE.step10.budgetIndex]; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas(); let legendItems = [];
+
+        // THE FIX: Define rawData up here at the top!
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        if (APP_STATE.step10.layers.raw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.6)` });
+        }
+
+        if (APP_STATE.step10.layers.sample) {
+            let pawsData;
+            if (currentBudget.includes("All")) {
+                pawsData = rawData.length > 0 ? rawData : Array.from({length: 10150}, () => ({x: Math.random(), y: Math.random()}));
+            } else {
+                pawsData = precomputedData?.[ds]?.[currentBudget]?.["paws"] || Array.from({length: parseInt(currentBudget)}, () => ({x: Math.random(), y: Math.random()}));
+            }
+            ctx.fillStyle = `rgba(${colors.paws}, 0.85)`;
+            pawsData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "PAWS Sample", color: `rgba(${colors.paws}, 0.9)` });
+        }
+        updateLegend(legendItems);
+    }
+
+    function toggleStep9Raw() {
+        APP_STATE.step9.showRaw = !APP_STATE.step9.showRaw; 
+        const el = document.getElementById('btnToggle9Raw');
+        el.classList.toggle('active', APP_STATE.step9.showRaw); 
+        el.querySelector('.icon-eye').innerText = APP_STATE.step9.showRaw ? '👁️' : '❌';
+        
+        // This will cleanly redraw the background and instantly restore the animation progress!
+        renderStep9Static();
+    }
+    
+    // Start the navigation engine!
+    enableNonLinearNavigation();
+    updateBudgetDisplay();
+
+  function switchDataset(newDatasetKey) {
+        APP_STATE.dataset = newDatasetKey;
+        
+        // THE FIX: Instantly recalculate the budget string for the new dataset!
+        updateBudgetDisplay();
+        
+        // Reset back to Step 1
+        executeStep(1);
+        document.getElementById('btnGoStep2').classList.add('hidden');
+        document.getElementById('btnPlotFull').style.display = 'flex';
+        
+        // Optional: clear the canvas visually until they hit Plot
+        document.getElementById('canvasMsg').innerHTML = '[ Ready to Plot ]';
+        const container = document.getElementById('canvasArea');
+        container.querySelectorAll('canvas').forEach(c => c.remove());
+        document.getElementById('annotationsLayer').innerHTML = '';
+        document.getElementById('vizLegend').classList.add('hidden');
+    }
+
+    function plotCompleteData() {
+        document.getElementById('btnPlotFull').style.display = 'none';
+        document.getElementById('btnGoStep2').classList.remove('hidden');
+        
+        // Render the raw data
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+        ctx.fillStyle = `rgba(${colors.raw}, 0.5)`; 
+        rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+        
+        updateLegend([{ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` }]);
+        updateChat(`The complete dataset is loaded.<br><br>Let's observe the visual attention targets computed from saliency maps by moving to Step 2 by pressing the <span class="txt-highlight">Generate Saliency Map </span> button!`);
+    }
+
+    // ==========================================
+    // STEP 2: COMPUTATIONAL SALIENCY (PART B)
+    // ==========================================
+    function startSaliencyStep() {
+        document.getElementById('btnGoStep2').style.display = 'none';
+        revealNextStepCard(2);
+        executeStep(2);
+        updateChat(TOUR_STEPS[2].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+    function updateSaliencyThreshold2(val) {
+        APP_STATE.step2.threshold = parseFloat(val);
+        renderPartBSaliency();
+    }
+
+    function toggleStep2Raw() {
+        APP_STATE.step2.showRaw = !APP_STATE.step2.showRaw;
+        const el = document.getElementById('btnToggle2Raw');
+        el.classList.toggle('active', APP_STATE.step2.showRaw);
+        el.querySelector('.icon-eye').innerText = APP_STATE.step2.showRaw ? '👁️' : '❌';
+        renderPartBSaliency();
+    }
+
+    function renderPartBSaliency() {
+        const ds = APP_STATE.dataset; const colors = getThemeColors();
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        // 1. Draw Background Data
+        if (APP_STATE.step2.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.15)`; 
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data (Faded)", color: `rgba(${colors.raw}, 0.15)` });
+        }
+
+        // 2. Draw Saliency
+        const threshold = APP_STATE.step2.threshold;
+        rawData.forEach(pt => {
+            const score = pt.saliency !== undefined ? pt.saliency : Math.max(0, 1 - (Math.hypot(pt.x-0.35, pt.y-0.75)*2));
+            if (score >= threshold) { 
+                const color = getViridisColor(score);
+                ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+                ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+        legendItems.push({ label: "High Visual Saliency", color: "var(--gold)" });
+        updateLegend(legendItems);
+    }
+
+    // ==========================================
+    // STEP 3: ALGORITHM PLAYGROUND (PART B)
+    // ==========================================
+    function startPlaygroundStep() {
+        document.getElementById('btnGoStep3').style.display = 'none';
+        revealNextStepCard(3);
+        executeStep(3);
+        updateChat(TOUR_STEPS[3].chat);
+        setTimeout(() => { document.getElementById('colControls').scrollTo({ top: document.getElementById('colControls').scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+   function changeBudgetB(sliderValue) {
+        APP_STATE.step3.budgetIndex = parseInt(sliderValue);
+        updateBudgetDisplay(); // Call the new dynamic function
+        renderPartBPlayground();
+    }
+
+    function setSamplerB(samplerId, element) {
+        APP_STATE.step3.activeSampler = samplerId;
+        
+        // Visually clear all toggles
+        document.querySelectorAll('.step3-sampler').forEach(el => {
+            el.classList.remove('active');
+            el.style.backgroundColor = ''; 
+            el.style.borderColor = 'var(--border)';
+        });
+        
+        // Safely apply active state to the clicked button
+        if (element) {
+            element.classList.add('active');
+            if (samplerId === 'paws') {
+                element.style.backgroundColor = 'rgba(255, 71, 87, 0.05)';
+                element.style.borderColor = 'var(--red)';
+            } else {
+                element.style.borderColor = 'var(--cyan)';
+            }
+        }
+
+        renderPartBPlayground();
+    }
+    
+    function toggleStep3Raw() {
+        APP_STATE.step3.showRaw = !APP_STATE.step3.showRaw; 
+        const el = document.getElementById('btnToggle3Raw');
+        el.classList.toggle('active', APP_STATE.step3.showRaw); 
+        el.querySelector('.icon-eye').innerText = APP_STATE.step3.showRaw ? '👁️' : '❌';
+        renderPartBPlayground();
+    }
+
+    function renderPartBPlayground() {
+        const ds = APP_STATE.dataset; 
+        const currentBudget = APP_STATE.step3.budgets[APP_STATE.step3.budgetIndex]; 
+        const activeSamp = APP_STATE.step3.activeSampler; 
+        const colors = getThemeColors();
+        
+        document.getElementById('canvasMsg').innerHTML = ''; 
+        const { ctx, pad, plotW, plotH, height } = initCanvas();
+        let legendItems = [];
+        let rawData = precomputedData?.[ds]?.["raw"] || [];
+
+        // 1. Draw Background Data
+        if (APP_STATE.step3.showRaw) {
+            ctx.fillStyle = `rgba(${colors.raw}, 0.5)`;
+            rawData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: "Original Data", color: `rgba(${colors.raw}, 0.5)` });
+        }
+
+        // THE FIX: The definitive, crash-proof color map
+        const colorMap = { 
+            'random': { rgb: colors.random, label: 'Random Sample' }, 
+            'vas': { rgb: colors.vas, label: 'VAS Sample' }, 
+            'density': { rgb: colors.density, label: 'DBS Sample' }, 
+            'blue_noise': { rgb: colors.blue_noise, label: 'Blue-Noise Sample' },
+            'max_min': { rgb: colors.max_min, label: 'Max-Min Sample' },
+            'paws': { rgb: colors.paws, label: 'PAWS Selection' }
+        };
+
+        // 2. Draw Sampled Data
+        let sData;
+        if (currentBudget.includes("All")) {
+            sData = rawData.length > 0 ? rawData : Array.from({length: 10150}, () => ({x: Math.random(), y: Math.random()}));
+        } else {
+            sData = precomputedData?.[ds]?.[currentBudget]?.[activeSamp] || Array.from({length: parseInt(currentBudget) || 1500}, () => ({x: Math.random(), y: Math.random()}));
+        }
+
+        // Safety check to ensure we don't crash if an unknown string is passed somehow
+        if (colorMap[activeSamp]) {
+            ctx.fillStyle = `rgba(${colorMap[activeSamp].rgb}, 0.85)`;
+            sData.forEach(pt => { ctx.beginPath(); ctx.arc(pad + (pt.x * plotW), (height - pad) - (pt.y * plotH), APP_STATE.markerSize, 0, Math.PI * 2); ctx.fill(); });
+            legendItems.push({ label: colorMap[activeSamp].label, color: `rgba(${colorMap[activeSamp].rgb}, 0.9)` });
+        }
+        
+        updateLegend(legendItems);
+    }
+</script>
+</body>
+</html>
